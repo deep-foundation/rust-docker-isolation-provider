@@ -19,6 +19,9 @@ struct Call<'a> {
     args: json::Value,
 }
 
+// fixme: possible to use in config, it is very easy - https://crates.io/keywords/configuration
+const CRATES: &str = "crates";
+
 #[post("/call", data = "<call>")]
 async fn call(call: Json<Call<'_>>) -> Result<RawJson<String>, script::Error> {
     static COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -27,10 +30,13 @@ async fn call(call: Json<Call<'_>>) -> Result<RawJson<String>, script::Error> {
         format!("{}.rs", COUNT.fetch_add(1, Ordering::SeqCst))
     }
 
-    let args = call.args.to_string();
-    script::execute_in(&env::current_dir()?.join("crates").join(unique_rs()), call.code, &args)
-        .await
-        .map(RawJson)
+    let repr = call.args.to_string();
+    script::execute_in(
+        (&env::current_dir()?.join(CRATES), &unique_rs()),
+        (call.code, &repr), // keep formatting
+    )
+    .await
+    .map(RawJson)
 }
 
 #[rocket::launch]

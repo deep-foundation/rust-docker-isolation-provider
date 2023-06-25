@@ -10,7 +10,7 @@ use rocket::{
 };
 
 pub enum Error {
-    Internal(Box<dyn std::error::Error + Sync + Send>), // to avoid anyhow as dependency
+    Internal(Box<dyn std::error::Error + Sync + Send>), // to avoid `anyhow` as dependency
     Compile(String),
 }
 
@@ -29,11 +29,14 @@ impl<E: std::error::Error + Sync + Send + 'static> From<E> for Error {
     }
 }
 
-pub async fn execute_in(path: &Path, code: &str, raw: &str) -> Result<String, Error> {
-    let _ = fs::create_dir("crates").await;
+pub async fn execute_in(
+    (path, file): (&Path, &str),
+    (code, raw): (&str, &str),
+) -> Result<String, Error> {
+    let _ = fs::create_dir(path).await;
 
     fs::write(
-        path,
+        path.join(file),
         format!(
             // todo: later try to use templates
             "fn main() -> Result<(), Box<dyn std::error::Error>> {{ \
@@ -43,7 +46,8 @@ pub async fn execute_in(path: &Path, code: &str, raw: &str) -> Result<String, Er
     )
     .await?;
 
-    let out = Command::new("rust-script").arg("-d serde_json").arg(path).output().await?;
+    let out =
+        Command::new("rust-script").arg("-d serde_json=1.0").arg(path.join(file)).output().await?;
 
     if out.status.success() {
         Ok(String::from_utf8(out.stdout)?)
