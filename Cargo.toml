@@ -8,4 +8,4 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 json = { package = "serde_json", version = "1.0" }
 
-rocket = { version = "0.5.0-rc.3", features = ["json"] }
+rocket = { version = "=0.5.0-rc.3", features = ["json"] }
