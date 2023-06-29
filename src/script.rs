@@ -3,10 +3,13 @@ use {
     tokio::{fs, process::Command},
 };
 
-use rocket::{
-    http::Status,
-    response::{self, Debug, Responder},
-    Request,
+use {
+    crate::Call,
+    rocket::{
+        http::Status,
+        response::{self, Debug, Responder},
+        Request,
+    },
 };
 
 pub enum Error {
@@ -31,7 +34,7 @@ impl<E: std::error::Error + Sync + Send + 'static> From<E> for Error {
 
 pub async fn execute_in(
     (path, file): (&Path, &str),
-    (code, raw): (&str, &str),
+    Call { head, main, args }: Call<'_>,
 ) -> Result<String, Error> {
     let _ = fs::create_dir(path).await;
 
@@ -39,9 +42,13 @@ pub async fn execute_in(
         path.join(file),
         format!(
             // todo: later try to use templates
-            "fn main() -> Result<(), Box<dyn std::error::Error>> {{ \
-                let args = serde_json::from_str(r#\"{raw}\"#)?; \
-                {code} println!(\"{{}}\", serde_json::to_string(&main(args))?); Ok(()) }}"
+            r##"
+            {head}
+            
+            fn main() -> Result<(), Box<dyn std::error::Error>> {{ 
+                let args = serde_json::from_str(r#"{args}"#)?; 
+                {main} println!("{{}}", serde_json::to_string(&main(args))?); Ok(()) 
+            }}"##
         ),
     )
     .await?;

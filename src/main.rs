@@ -1,12 +1,11 @@
 #![allow(clippy::let_unit_value)] // false positive: https://github.com/SergioBenitez/Rocket/issues/2568
-#![feature(async_closure)]
 
 mod script;
 
 use {
     rocket::{response::content::RawJson, serde::json::Json},
     std::{
-        env,
+        borrow, env,
         sync::atomic::{AtomicUsize, Ordering},
     },
 };
@@ -14,8 +13,9 @@ use {
 use rocket::{get, post, routes};
 
 #[derive(serde::Deserialize)]
-struct Call<'a> {
-    code: &'a str,
+pub struct Call<'a> {
+    head: borrow::Cow<'a, str>,
+    main: borrow::Cow<'a, str>,
     args: json::Value,
 }
 
@@ -30,10 +30,9 @@ async fn call(call: Json<Call<'_>>) -> Result<RawJson<String>, script::Error> {
         format!("{}.rs", COUNT.fetch_add(1, Ordering::SeqCst))
     }
 
-    let repr = call.args.to_string();
     script::execute_in(
         (&env::current_dir()?.join(CRATES), &unique_rs()),
-        (call.code, &repr), // keep formatting
+        call.into_inner(), // keep formatting
     )
     .await
     .map(RawJson)
