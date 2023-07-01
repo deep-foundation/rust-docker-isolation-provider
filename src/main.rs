@@ -4,14 +4,14 @@ mod script;
 
 use {
     moka::future::Cache,
-    rocket::{response::content::RawJson, serde::json::Json},
+    rocket::{response::content::RawJson, serde::json::Json, State},
     std::{
         borrow, env,
         sync::atomic::{AtomicUsize, Ordering},
     },
 };
 
-use rocket::{get, post, routes, State};
+use rocket::{get, post, routes};
 
 #[derive(serde::Deserialize)]
 pub struct Call<'a> {
