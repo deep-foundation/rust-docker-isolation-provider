@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
+moka = { version = "0.11", features = ["future"] }
 serde = { version = "1.0", features = ["derive"] }
-json = { package = "serde_json", version = "1.0" }
 
 rocket = { version = "=0.5.0-rc.3", features = ["json"] }
+json = { version = "1.0", package = "serde_json", features = ["raw_value"] }

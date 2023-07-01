@@ -3,10 +3,13 @@ use {
     tokio::{fs, process::Command},
 };
 
-use rocket::{
-    http::Status,
-    response::{self, Debug, Responder},
-    Request,
+use {
+    crate::Call,
+    rocket::{
+        http::Status,
+        response::{self, Debug, Responder},
+        Request,
+    },
 };
 
 pub enum Error {
@@ -31,7 +34,7 @@ impl<E: std::error::Error + Sync + Send + 'static> From<E> for Error {
 
 pub async fn execute_in(
     (path, file): (&Path, &str),
-    (code, raw): (&str, &str),
+    Call { head, main, args }: Call<'_>,
 ) -> Result<String, Error> {
     let _ = fs::create_dir(path).await;
 
@@ -39,15 +42,24 @@ pub async fn execute_in(
         path.join(file),
         format!(
             // todo: later try to use templates
-            "fn main() -> Result<(), Box<dyn std::error::Error>> {{ \
-                let args = serde_json::from_str(r#\"{raw}\"#)?; \
-                {code} println!(\"{{}}\", serde_json::to_string(&main(args))?); Ok(()) }}"
+            r##"
+            {head}
+            
+            fn main() -> Result<(), Box<dyn std::error::Error>> {{
+                let args = std::env::args().skip(1).next().unwrap();
+                let args = serde_json::from_str(&args)?; 
+                {main} println!("{{}}", serde_json::to_string(&main(args))?); Ok(()) 
+            }}"##
         ),
     )
     .await?;
 
-    let out =
-        Command::new("rust-script").arg("-d serde_json=1.0").arg(path.join(file)).output().await?;
+    let out = Command::new("rust-script")
+        .args(["-d", "serde_json=1.0"])
+        .arg(path.join(file))
+        .arg(args.get())
+        .output()
+        .await?;
 
     if out.status.success() {
         Ok(String::from_utf8(out.stdout)?)
