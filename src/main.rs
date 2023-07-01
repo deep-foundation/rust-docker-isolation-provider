@@ -3,6 +3,7 @@
 mod script;
 
 use {
+    json::value::RawValue,
     moka::future::Cache,
     rocket::{response::content::RawJson, serde::json::Json, State},
     std::{
@@ -15,10 +16,14 @@ use rocket::{get, post, routes};
 
 #[derive(serde::Deserialize)]
 pub struct Call<'a> {
-    #[serde(default)]
+    #[serde(default, borrow)]
     head: borrow::Cow<'a, str>,
+
+    #[serde(borrow)]
     main: borrow::Cow<'a, str>,
-    args: json::Value,
+
+    #[serde(borrow)]
+    args: &'a RawValue,
 }
 
 // fixme: possible to use in config, it is very easy - https://crates.io/keywords/configuration
@@ -26,7 +31,7 @@ const CRATES: &str = "crates";
 
 #[post("/call", data = "<call>")]
 async fn call(
-    call: Json<Call<'static>>,
+    call: Json<Call<'_>>,
     scripts: &State<Scripts>,
 ) -> Result<RawJson<String>, script::Error> {
     static COUNT: AtomicUsize = AtomicUsize::new(0);
