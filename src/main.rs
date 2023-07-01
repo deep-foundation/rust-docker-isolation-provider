@@ -1,5 +1,4 @@
 #![allow(clippy::let_unit_value)] // false positive: https://github.com/SergioBenitez/Rocket/issues/2568
-#![deny(clippy::pedantic)]
 
 mod script;
 
@@ -16,6 +15,7 @@ use rocket::{get, post, routes, State};
 
 #[derive(serde::Deserialize)]
 pub struct Call<'a> {
+    #[serde(default)]
     head: borrow::Cow<'a, str>,
     main: borrow::Cow<'a, str>,
     args: json::Value,
