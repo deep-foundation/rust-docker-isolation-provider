@@ -55,7 +55,7 @@ pub async fn execute_in(
     .await?;
 
     let out = Command::new("rust-script")
-        .arg("-d serde_json=1.0")
+        .args(["-d", "serde_json=1.0"])
         .arg(path.join(file))
         .arg(args.to_string())
         .output()
