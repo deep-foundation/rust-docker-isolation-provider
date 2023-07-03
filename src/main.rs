@@ -69,3 +69,32 @@ fn launch() -> _ {
         .manage(Scripts { cache: Cache::new(8096) })
         .mount("/", routes![init, health, call])
 }
+
+// todo: extract into `tests/` folder
+//  it may seem excessive because you need to create `lib.rs` as well,
+//  which will lead to a loss of minimalism
+#[cfg(test)]
+mod tests {
+    use {
+        json::json,
+        rocket::{http::Status, local::blocking::Client, uri},
+    };
+
+    #[test]
+    fn hello() {
+        let client = Client::tracked(super::launch()).expect("valid rocket instance");
+
+        let res = client
+            .post(uri!(super::call))
+            .json(&json!({
+                "main": r#"fn main(hello: &str) -> String {
+                    format!("{hello} world")
+                }"#,
+                "args": "Hi"
+            }))
+            .dispatch();
+
+        assert_eq!(res.status(), Status::Ok);
+        assert_eq!(res.into_json::<String>().unwrap(), "Hi world");
+    }
+}
