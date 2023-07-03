@@ -26,7 +26,9 @@ pub struct Call<'a> {
     args: &'a RawValue,
 }
 
-// fixme: possible to use in config, it is very easy - https://crates.io/keywords/configuration
+// todo: possible to use in config, it is very easy:
+//  - https://rocket.rs/v0.5-rc/guide/configuration/#configuration
+//  - https://crates.io/keywords/configuration
 const CRATES: &str = "crates";
 
 #[post("/call", data = "<call>")]
