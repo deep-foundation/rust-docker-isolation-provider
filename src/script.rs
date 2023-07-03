@@ -44,11 +44,11 @@ pub async fn execute_in(
             // todo: later try to use templates
             r##"
             {head}
-            
+
             fn main() -> Result<(), Box<dyn std::error::Error>> {{
                 let args = std::env::args().skip(1).next().unwrap();
-                let args = serde_json::from_str(&args)?; 
-                {main} println!("{{}}", serde_json::to_string(&main(args))?); Ok(()) 
+                let args = serde_json::from_str(&args)?;
+                {main} println!("{{}}", serde_json::to_string(&main(args))?); Ok(())
             }}"##
         ),
     )
