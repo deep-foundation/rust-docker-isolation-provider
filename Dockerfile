@@ -1,14 +1,20 @@
-FROM rust:slim-buster
+FROM rust:slim-buster as rust 
 
-COPY . /app
 WORKDIR /app
+COPY . .
 
 RUN \
     --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/home/root/app/target \
-  cargo +stable build --profile release-strip
+    --mount=type=cache,target=/app/target \
+  cargo install --path . --profile release-strip
+
+
+FROM debian:stable-slim
+
+COPY --from=rust /usr/local/cargo/bin/rust-docker-isolation-provider /usr/local/bin
 
 # `Rocket.toml` to change the port: https://rocket.rs/v0.5-rc/guide/configuration
 EXPOSE 8000
 
-CMD ["target/release/rust-docker-isolation-provider"]
+CMD ["rust-docker-isolation-provider"]
+
