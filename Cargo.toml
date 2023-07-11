@@ -19,3 +19,5 @@ lto = "thin"
 [profile.release-strip]
 inherits = "release"
 strip = "symbols"
+codegen-units = 1
+lto = "fat"
