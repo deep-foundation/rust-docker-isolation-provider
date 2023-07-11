@@ -6,7 +6,7 @@ COPY . .
 RUN \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
-  cargo install --path . --profile release-strip
+  cargo install --path . --profile docker
 
 
 FROM debian:stable-slim
@@ -17,4 +17,3 @@ COPY --from=rust /usr/local/cargo/bin/rust-docker-isolation-provider /usr/local/
 EXPOSE 8000
 
 CMD ["rust-docker-isolation-provider"]
-
