@@ -37,6 +37,7 @@ jobs:
         os: [ubuntu]
         include:
           - rust: nightly
+            os: ubuntu
             target: x64_86-unknown-linux-musl
     steps:
       - uses: actions/checkout@v3
