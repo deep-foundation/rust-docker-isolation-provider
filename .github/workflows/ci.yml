@@ -37,16 +37,13 @@ jobs:
         os: [ubuntu]
         include:
           - rust: nightly
-            os: ubuntu
-            target: x64_86-unknown-linux-musl
+            target: x86_64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{matrix.rust}}
-      - name: Install ${{matrix.target}} target
-        run: rustup target add ${{matrix.target}}
-        if: matrix.target
+          targets: ${{matrix.target}}
       - run: cargo check
 
   miri:
