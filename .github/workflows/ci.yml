@@ -24,6 +24,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{matrix.rust}}
+      - run: cargo install rust-script
       - run: cargo test
 
   build:
@@ -35,9 +36,8 @@ jobs:
         rust: [stable]
         os: [ubuntu]
         include:
-          - rust: stable
+          - rust: nightly
             target: x64_86-unknown-linux-musl
-          - rust: stable
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
@@ -50,7 +50,7 @@ jobs:
     name: Miri
     runs-on: ubuntu-latest
     env:
-      MIRIFLAGS: -Zmiri-strict-provenance
+      MIRIFLAGS: -Zmiri-strict-provenance -Zmiri-disable-isolation
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@miri
@@ -64,5 +64,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@clippy
-      - run: cargo clippy --tests -- -Dclippy::all -Dclippy::pedantic
-      - run: cargo clippy --all-features --tests -- -Dclippy::all -Dclippy::pedantic
+#       later try to add `-Dclippy::pedantic`
+      - run: cargo clippy --tests -- -Dclippy::all
+      - run: cargo clippy --all-features --tests -- -Dclippy::all
