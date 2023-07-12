@@ -28,16 +28,14 @@ jobs:
       - run: cargo test
 
   build:
-    name: ${{matrix.rust}} ${{matrix.target}}
+    name: ${{matrix.target || 'native'}}
     runs-on: ${{matrix.os}}-latest
     strategy:
       fail-fast: false
       matrix:
-        rust: [stable]
         os: [ubuntu]
         include:
-          - rust: nightly
-            os: ubuntu
+          - os: ubuntu
             target: x86_64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v3
@@ -65,5 +63,5 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@clippy
-#       later try to add `-Dclippy::pedantic`
+      # later try to add `-Dclippy::pedantic`
       - run: cargo clippy --tests -- -Dclippy::all
