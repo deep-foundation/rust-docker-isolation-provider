@@ -34,9 +34,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu]
-        include:
-          - os: ubuntu
-            target: x86_64-unknown-linux-musl
+        target: [x86_64-unknown-linux-musl]
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
