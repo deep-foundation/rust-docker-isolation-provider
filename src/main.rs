@@ -81,6 +81,7 @@ mod tests {
     };
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn hello() {
         let client = Client::tracked(super::launch()).expect("valid rocket instance");
 
