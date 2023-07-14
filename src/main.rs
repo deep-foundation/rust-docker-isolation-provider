@@ -20,10 +20,10 @@ pub struct Call<'a> {
     head: borrow::Cow<'a, str>,
 
     #[serde(borrow)]
-    main: borrow::Cow<'a, str>,
+    code: borrow::Cow<'a, str>,
 
     #[serde(borrow)]
-    args: &'a RawValue,
+    data: &'a RawValue,
 }
 
 // todo: possible to use in config, it is very easy:
@@ -42,7 +42,7 @@ async fn call(
         format!("{}.rs", COUNT.fetch_add(1, Ordering::SeqCst))
     }
 
-    let file = scripts.cache.entry_by_ref(call.main.as_ref()).or_insert_with(unique_rs()).await;
+    let file = scripts.cache.entry_by_ref(call.code.as_ref()).or_insert_with(unique_rs()).await;
     script::execute_in(
         (&env::current_dir()?.join(CRATES), &file.into_value()),
         call.into_inner(), // keep formatting
@@ -76,7 +76,7 @@ fn launch() -> _ {
 #[cfg(test)]
 mod tests {
     use {
-        json::json,
+        json::{json, Value},
         rocket::{http::Status, local::blocking::Client, uri},
     };
 
@@ -88,14 +88,14 @@ mod tests {
         let res = client
             .post(uri!(super::call))
             .json(&json!({
-                "main": r#"fn main(hello: &str) -> String {
+                "code": r#"fn main(hello: &str) -> String {
                     format!("{hello} world")
                 }"#,
-                "args": "Hi"
+                "data": "Hi"
             }))
             .dispatch();
 
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_json::<String>().unwrap(), "Hi world");
+        assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }));
     }
 }

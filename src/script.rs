@@ -1,6 +1,6 @@
 use {
     std::path::Path,
-    tokio::{fs, process::Command},
+    tokio::{fs, process},
 };
 
 use {
@@ -14,14 +14,14 @@ use {
 
 pub enum Error {
     Internal(Box<dyn std::error::Error + Sync + Send>), // to avoid `anyhow` as dependency
-    Compile(String),
+    Compiler(String),
 }
 
 impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
     fn respond_to(self, request: &'r Request<'_>) -> response::Result<'o> {
         match self {
             Self::Internal(err) => Debug(err).respond_to(request),
-            Self::Compile(err) => (Status::UnprocessableEntity, err).respond_to(request),
+            Self::Compiler(err) => (Status::UnprocessableEntity, err).respond_to(request),
         }
     }
 }
@@ -32,38 +32,28 @@ impl<E: std::error::Error + Sync + Send + 'static> From<E> for Error {
     }
 }
 
+const TEMPLATE: &str = include_str!("template.trs");
+
+// todo: try to replace `(from, to)` into hashmap
+//  and use regex
+pub fn expand(src: &str, [from, to]: [&str; 2]) -> String {
+    src.replace(from, to)
+}
+
 pub async fn execute_in(
     (path, file): (&Path, &str),
-    Call { head, main, args }: Call<'_>,
+    Call { head: _head, code, data }: Call<'_>,
 ) -> Result<String, Error> {
     let _ = fs::create_dir(path).await;
 
-    fs::write(
-        path.join(file),
-        format!(
-            // todo: later try to use templates
-            r##"
-            {head}
+    fs::write(path.join(file), expand(TEMPLATE, ["#{main}", &code])).await?;
 
-            fn main() -> Result<(), Box<dyn std::error::Error>> {{
-                let args = std::env::args().skip(1).next().unwrap();
-                let args = serde_json::from_str(&args)?;
-                {main} println!("{{}}", serde_json::to_string(&main(args))?); Ok(())
-            }}"##
-        ),
-    )
-    .await?;
-
-    let out = Command::new("rust-script")
-        .args(["-d", "serde_json=1.0"])
-        .arg(path.join(file))
-        .arg(args.get())
-        .output()
-        .await?;
+    let out =
+        process::Command::new("rust-script").arg(path.join(file)).arg(data.get()).output().await?;
 
     if out.status.success() {
         Ok(String::from_utf8(out.stdout)?)
     } else {
-        Err(Error::Compile(String::from_utf8(out.stderr)?))
+        Err(Error::Compiler(String::from_utf8(out.stderr)?))
     }
 }

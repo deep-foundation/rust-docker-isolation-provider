@@ -1,0 +1,64 @@
+//! ```cargo
+//! [dependencies]
+//! serde = { version = "1.0.157", features = ["derive"] }
+//! serde_json = "1.0.94"
+//! ```
+#![allow(incomplete_features)]
+#![feature(specialization)]
+
+use std::panic::catch_unwind;
+
+mod __respond {
+    use serde::{Serialize, Serializer};
+
+    #[derive(Serialize)]
+    pub struct Infallible {}
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "lowercase")]
+    enum Respond<T, E> {
+        Resolved(T),
+        Rejected(E),
+    }
+
+    pub trait Responder {
+        fn respond_to<S: Serializer>(self, serializer: S) -> Option<S::Error>;
+        // where (on believe)
+        //     S: Serializer<Ok = ()>;
+    }
+
+    impl<T: Serialize> Responder for T {
+        default fn respond_to<S: Serializer>(self, serializer: S) -> Option<S::Error> {
+            Respond::<_, Infallible>::Resolved(self).serialize(serializer).err()
+        }
+    }
+
+    impl<T: Serialize, E: Serialize> Responder for Result<T, E> {
+        fn respond_to<S: Serializer>(self, serializer: S) -> Option<S::Error> {
+            match self {
+                Ok(ok) => Respond::Resolved(ok),
+                Err(err) => Respond::Rejected(err),
+            }
+                .serialize(serializer)
+                .err()
+        }
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = std::env::args().nth(1).unwrap();
+    let args = serde_json::from_str(&args)?;
+
+    #{main}
+
+    let main = catch_unwind(move || main(args)).unwrap_or_else(|_| {
+        todo!("read more about: https://doc.rust-lang.org/src/std/panicking.rs.html#237-290")
+    });
+
+    let mut serializer = serde_json::Serializer::new(Vec::with_capacity(128));
+    if let Some(_err) = __respond::Responder::respond_to(main, &mut serializer) {
+        todo!("catch double faults")
+    }
+    println!("{}", unsafe { String::from_utf8_unchecked(serializer.into_inner()) });
+    Ok(())
+}
