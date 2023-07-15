@@ -77,7 +77,7 @@ fn launch() -> _ {
 mod tests {
     use {
         json::{json, Value},
-        rocket::{http::Status, local::blocking::Client, uri},
+        rocket::{local::blocking::Client, uri},
     };
 
     #[test]
