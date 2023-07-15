@@ -77,7 +77,7 @@ fn launch() -> _ {
 mod tests {
     use {
         json::{json, Value},
-        rocket::{local::blocking::Client, uri},
+        rocket::{http::Status, local::blocking::Client, uri},
     };
 
     #[test]
@@ -95,6 +95,7 @@ mod tests {
             }))
             .dispatch();
 
+        assert_eq!(res.status(), Status::Ok);
         assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }));
     }
 }

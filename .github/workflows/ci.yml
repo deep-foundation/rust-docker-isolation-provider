@@ -27,6 +27,9 @@ jobs:
           # but now scripts runtime require some nightly features
           toolchain: nightly
       - run: cargo install rust-script
+        # manually override rustup for stable (+stable is so deeply)
+      - run: rustup override set nightly
+        if: matrix.rust == 'stable'
       - run: cargo +${{matrix.rust}} test
 
   build:
