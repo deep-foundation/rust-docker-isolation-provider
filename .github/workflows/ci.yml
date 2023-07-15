@@ -28,9 +28,9 @@ jobs:
           toolchain: nightly
       - run: cargo install rust-script
         # manually override rustup for stable (+stable is so deeply)
-      - run: rustup override set nightly
+      - run: rustup override set stable
         if: matrix.rust == 'stable'
-      - run: cargo +${{matrix.rust}} test
+      - run: cargo test
 
   build:
     name: ${{matrix.target || 'native'}}
