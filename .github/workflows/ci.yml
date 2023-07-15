@@ -23,9 +23,11 @@ jobs:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{matrix.rust}}
+          # we check that provider `stable` compatible
+          # but now scripts runtime require some nightly features
+          toolchain: nightly
       - run: cargo install rust-script
-      - run: cargo test
+      - run: cargo +${{matrix.rust}} test
 
   build:
     name: ${{matrix.target || 'native'}}
