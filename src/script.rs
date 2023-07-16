@@ -48,8 +48,12 @@ pub async fn execute_in(
 
     fs::write(path.join(file), expand(TEMPLATE, ["#{main}", &code])).await?;
 
-    let out =
-        process::Command::new("rust-script").arg(path.join(file)).arg(data.get()).output().await?;
+    let out = process::Command::new("rust-script")
+        .args(["--toolchain", "nightly"])
+        .arg(path.join(file))
+        .arg(data.get())
+        .output()
+        .await?;
 
     if out.status.success() {
         Ok(String::from_utf8(out.stdout)?)
