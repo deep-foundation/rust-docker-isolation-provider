@@ -43,9 +43,9 @@ mod __respond {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let args = std::env::args().nth(1).unwrap();
-    let args = serde_json::from_str(&args)?;
+    let args = serde_json::from_str(&args).unwrap(); // one error - on panic
 
     #{main}
 
@@ -58,5 +58,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         todo!("`Vec` (probably) will not produce `IO` errors")
     }
     println!("{}", unsafe { String::from_utf8_unchecked(serializer.into_inner()) });
-    Ok(())
 }
