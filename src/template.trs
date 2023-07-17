@@ -3,7 +3,7 @@
 //! serde = { version = "1.0.157", features = ["derive"] }
 //! serde_json = "1.0.94"
 //! ```
-#![allow(incomplete_features)]
+#![allow(incomplete_features, unused_macros)]
 #![feature(specialization)]
 
 mod __respond {
@@ -43,6 +43,34 @@ mod __respond {
     }
 }
 
+macro_rules! __stdout_error {
+    () => {
+        compile_error!(
+            "print to `stdout` doesn't make sense, \
+             as it will corrupt the result. \
+             Instead return any impl `Serialize` from `main`."
+        );
+    };
+}
+
+macro_rules! print {
+    ($($tt:tt)*) => {{
+        __stdout_error!();
+        if false {
+            std::print!($($tt)*);
+        }
+    }};
+}
+
+macro_rules! println {
+    ($($tt:tt)*) => {{
+        __stdout_error!();
+        if false {
+            std::println!($($tt)*);
+        }
+    }};
+}
+
 fn main() {
     let args = std::env::args().nth(1).unwrap();
     let args = serde_json::from_str(&args).unwrap(); // one error - on panic
@@ -57,5 +85,6 @@ fn main() {
     if let Some(_err) = __respond::Responder::respond_to(main, &mut serializer) {
         todo!("`Vec` (probably) will not produce `IO` errors")
     }
-    println!("{}", unsafe { String::from_utf8_unchecked(serializer.into_inner()) });
+
+    std::io::Write::write_all(&mut std::io::stdout(), &serializer.into_inner());
 }

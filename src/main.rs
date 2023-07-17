@@ -2,6 +2,7 @@
 
 mod script;
 
+use std::mem;
 use {
     json::value::RawValue,
     moka::future::Cache,
@@ -22,8 +23,13 @@ pub struct Call<'a> {
     #[serde(borrow)]
     code: borrow::Cow<'a, str>,
 
-    #[serde(borrow)]
+    #[serde(borrow, default = "raw_null")]
     data: &'a RawValue,
+}
+
+fn raw_null() -> &'static RawValue {
+    // Safety: `RawValue` is an `transparent` unsized newvalue above str
+    unsafe { mem::transmute::<&str, _>("null") }
 }
 
 // todo: possible to use in config, it is very easy:
@@ -56,7 +62,7 @@ struct Scripts {
 }
 
 #[rocket::launch]
-fn launch() -> _ {
+fn rocket() -> _ {
     #[get("/init")]
     fn init() {}
 
@@ -80,10 +86,14 @@ mod tests {
         rocket::{http::Status, local::blocking::Client, uri},
     };
 
+    fn rocket() -> Client {
+        Client::tracked(super::rocket()).expect("valid rocket instance")
+    }
+
     #[test]
     #[cfg_attr(miri, ignore)]
     fn hello() {
-        let client = Client::tracked(super::launch()).expect("valid rocket instance");
+        let client = rocket();
 
         let res = client
             .post(uri!(super::call))
@@ -97,5 +107,25 @@ mod tests {
 
         assert_eq!(res.status(), Status::Ok);
         assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn forbid_stdout() {
+        let client = rocket();
+
+        let res = client
+            .post(uri!(super::call))
+            .json(&json!({
+                "code": r#"fn main(():()) {
+                    println!("Hello, World!")
+                }"#
+            }))
+            .dispatch();
+
+        assert_eq!(res.status(), Status::UnprocessableEntity);
+        assert!(
+            res.into_string().unwrap().contains("print to `stdout` doesn't make sense")
+        );
     }
 }
