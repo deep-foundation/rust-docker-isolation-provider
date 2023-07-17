@@ -2,13 +2,12 @@
 
 mod script;
 
-use std::mem;
 use {
     json::value::RawValue,
     moka::future::Cache,
     rocket::{response::content::RawJson, serde::json::Json, State},
     std::{
-        borrow, env,
+        borrow, env, mem,
         sync::atomic::{AtomicUsize, Ordering},
     },
 };
@@ -124,8 +123,6 @@ mod tests {
             .dispatch();
 
         assert_eq!(res.status(), Status::UnprocessableEntity);
-        assert!(
-            res.into_string().unwrap().contains("print to `stdout` doesn't make sense")
-        );
+        assert!(res.into_string().unwrap().contains("print to `stdout` doesn't make sense"));
     }
 }
