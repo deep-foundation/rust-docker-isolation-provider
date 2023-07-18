@@ -81,7 +81,7 @@ fn rocket() -> _ {
 #[cfg(test)]
 mod tests {
     use {
-        json::{json, Value},
+        json::{json, /*Value*/},
         rocket::{http::Status, local::blocking::Client, uri},
     };
 
