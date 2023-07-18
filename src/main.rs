@@ -112,7 +112,6 @@ mod tests {
     use {
         json::json,
         rocket::{http::Status, local::blocking::Client, uri},
-        std::sync::Arc,
     };
 
     #[test]
