@@ -81,7 +81,7 @@ fn rocket() -> _ {
 #[cfg(test)]
 mod tests {
     use {
-        json::{json, /*Value*/},
+        json::{json, Value},
         rocket::{http::Status, local::blocking::Client, uri},
     };
 
@@ -104,9 +104,8 @@ mod tests {
             }))
             .dispatch();
 
-        panic!("{:?}", res.into_string());
-        // assert_eq!(res.status(), Status::Ok);
-        // assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }));
+        assert_eq!(res.status(), Status::Ok);
+        assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }));
     }
 
     #[test]
