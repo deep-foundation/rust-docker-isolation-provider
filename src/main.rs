@@ -5,10 +5,18 @@ mod script;
 use {
     json::value::RawValue,
     moka::future::Cache,
-    rocket::{response::content::RawJson, serde::json::Json, State},
+    rocket::{
+        response::{content::RawJson, stream::ByteStream},
+        serde::json::Json,
+        Shutdown, State,
+    },
     std::{
         borrow, env,
         sync::atomic::{AtomicUsize, Ordering},
+    },
+    tokio::{
+        select,
+        sync::broadcast::{channel, error::RecvError, Sender},
     },
 };
 
@@ -35,6 +43,7 @@ const CRATES: &str = "crates";
 async fn call(
     call: Json<Call<'_>>,
     scripts: &State<Scripts>,
+    tx: &State<Sender<Vec<u8>>>,
 ) -> Result<RawJson<String>, script::Error> {
     static COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -43,12 +52,36 @@ async fn call(
     }
 
     let file = scripts.cache.entry_by_ref(call.main.as_ref()).or_insert_with(unique_rs()).await;
-    script::execute_in(
+    let (out, bytes) = script::execute_in(
         (&env::current_dir()?.join(CRATES), &file.into_value()),
         call.into_inner(), // keep formatting
     )
-    .await
-    .map(RawJson)
+    .await?;
+
+    // A send 'fails' if there are no active subscribers. That's okay.
+    let _ = tx.send(bytes);
+
+    Ok(RawJson(out))
+}
+
+#[get("/stream")]
+fn stream(stream: &State<Sender<Vec<u8>>>, mut end: Shutdown) -> ByteStream![Vec<u8>] {
+    let mut rx = stream.subscribe();
+
+    ByteStream! {
+        loop {
+            yield select! {
+                msg = rx.recv() => {
+                    match msg {
+                        Ok(bytes) => bytes,
+                        Err(RecvError::Closed) => break,
+                        Err(RecvError::Lagged(_)) => continue,
+                    }
+                }
+                _ = &mut end => break,
+            };
+        }
+    }
 }
 
 struct Scripts {
@@ -66,8 +99,9 @@ fn launch() -> _ {
     }
 
     rocket::build()
+        .manage(channel::<Vec<u8>>(1024).0)
         .manage(Scripts { cache: Cache::new(8096) })
-        .mount("/", routes![init, health, call])
+        .mount("/", routes![init, health, call, stream])
 }
 
 // todo: extract into `tests/` folder
@@ -78,6 +112,7 @@ mod tests {
     use {
         json::json,
         rocket::{http::Status, local::blocking::Client, uri},
+        std::sync::Arc,
     };
 
     #[test]
@@ -97,5 +132,33 @@ mod tests {
 
         assert_eq!(res.status(), Status::Ok);
         assert_eq!(res.into_json::<String>().unwrap(), "Hi world");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[cfg_attr(miri, ignore)]
+    async fn io_stream() {
+        use rocket::local::asynchronous::Client;
+
+        let client = Client::tracked(super::launch()).await.expect("valid rocket instance");
+        let client = Arc::new(client);
+
+        let stream = client.clone();
+        tokio::spawn(async move {
+            stream
+                .post(uri!(super::call))
+                .json(&json!({
+                    "main": r#"fn main(hello: &str) {
+                    eprintln!("{hello} world");
+                }"#,
+                    "args": "Hi"
+                }))
+                .dispatch()
+                .await;
+
+            stream.rocket().shutdown().notify();
+        });
+
+        let bytes = client.get(uri!(super::stream)).dispatch().await.into_bytes().await.unwrap();
+        assert_eq!(&bytes[..8], b"Hi world");
     }
 }

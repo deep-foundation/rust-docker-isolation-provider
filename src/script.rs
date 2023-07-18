@@ -35,7 +35,7 @@ impl<E: std::error::Error + Sync + Send + 'static> From<E> for Error {
 pub async fn execute_in(
     (path, file): (&Path, &str),
     Call { head, main, args }: Call<'_>,
-) -> Result<String, Error> {
+) -> Result<(String, Vec<u8>), Error> {
     let _ = fs::create_dir(path).await;
 
     fs::write(
@@ -62,7 +62,7 @@ pub async fn execute_in(
         .await?;
 
     if out.status.success() {
-        Ok(String::from_utf8(out.stdout)?)
+        Ok((String::from_utf8(out.stdout)?, out.stderr))
     } else {
         Err(Error::Compile(String::from_utf8(out.stderr)?))
     }
