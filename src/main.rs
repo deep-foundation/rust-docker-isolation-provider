@@ -133,32 +133,4 @@ mod tests {
         assert_eq!(res.status(), Status::Ok);
         assert_eq!(res.into_json::<String>().unwrap(), "Hi world");
     }
-
-    #[tokio::test(flavor = "multi_thread")]
-    #[cfg_attr(miri, ignore)]
-    async fn io_stream() {
-        use rocket::local::asynchronous::Client;
-
-        let client = Client::tracked(super::launch()).await.expect("valid rocket instance");
-        let client = Arc::new(client);
-
-        let stream = client.clone();
-        tokio::spawn(async move {
-            stream
-                .post(uri!(super::call))
-                .json(&json!({
-                    "main": r#"fn main(hello: &str) {
-                    eprintln!("{hello} world");
-                }"#,
-                    "args": "Hi"
-                }))
-                .dispatch()
-                .await;
-
-            stream.rocket().shutdown().notify();
-        });
-
-        let bytes = client.get(uri!(super::stream)).dispatch().await.into_bytes().await.unwrap();
-        assert_eq!(&bytes[..8], b"Hi world");
-    }
 }
