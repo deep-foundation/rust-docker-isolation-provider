@@ -86,5 +86,5 @@ fn main() {
         todo!("`Vec` (probably) will not produce `IO` errors")
     }
 
-    std::io::Write::write_all(&mut std::io::stdout(), &serializer.into_inner());
+    std::io::Write::write_all(&mut std::io::stdout(), &serializer.into_inner()).unwrap();
 }
