@@ -170,7 +170,7 @@ mod tests {
         assert_eq!(res.into_json::<String>().unwrap(), "Hi world");
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 12)]
+    #[tokio::test]
     #[cfg_attr(miri, ignore)]
     async fn io_stream() {
         use rocket::local::asynchronous::Client;
