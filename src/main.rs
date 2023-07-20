@@ -110,9 +110,47 @@ fn launch() -> _ {
 #[cfg(test)]
 mod tests {
     use {
-        json::json,
         rocket::{http::Status, local::blocking::Client, uri},
+        std::time::Duration,
+        tokio::{join, time},
     };
+
+    macro_rules! rusty {
+        (($($pats:tt)*) $(-> $ty:ty)? { $body:expr } $(where $args:expr)? ) => {{
+            fn __compile_check() {
+                 fn main($($pats)*) $(-> $ty)? { $body }
+            }
+            json::json!({
+                "main": stringify!(
+                    fn main($($pats)*) $(-> $ty)? { $body }
+                ),
+                $("args": $args)?
+            })
+        }};
+    }
+
+    #[test]
+    fn rusty() {
+        fn clean(json: json::Value) -> String {
+            json.to_string().replace(char::is_whitespace, "").replace("\\n", "")
+        }
+
+        let raw = json::json!({
+            "main": r#"
+                fn main(hello: &str) -> String {
+                    format!("{hello}world")
+                }"#,
+            "args": "Hi"
+        });
+
+        let rusty = rusty! {
+            (hello: &str) -> String {
+                format!("{hello} world")
+            } where { "Hi" }
+        };
+
+        assert_eq!(clean(raw), clean(rusty));
+    }
 
     #[test]
     #[cfg_attr(miri, ignore)]
@@ -121,15 +159,52 @@ mod tests {
 
         let res = client
             .post(uri!(super::call))
-            .json(&json!({
-                "main": r#"fn main(hello: &str) -> String {
+            .json(&rusty! {
+                (hello: &str) -> String {
                     format!("{hello} world")
-                }"#,
-                "args": "Hi"
-            }))
+                } where { "Hi" }
+            })
             .dispatch();
 
         assert_eq!(res.status(), Status::Ok);
         assert_eq!(res.into_json::<String>().unwrap(), "Hi world");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 12)]
+    #[cfg_attr(miri, ignore)]
+    async fn io_stream() {
+        use rocket::local::asynchronous::Client;
+
+        let client = Client::tracked(super::launch()).await.expect("valid rocket instance");
+        let sleep_ms = |ms| time::sleep(Duration::from_millis(ms));
+
+        let server = async {
+            client
+                .post(uri!(super::call))
+                .json(&rusty! {
+                    (hello: &str) {
+                        eprintln!("{hello} world")
+                    } where { "Hi" }
+                })
+                .dispatch()
+                .await;
+        };
+
+        let listener = async {
+            let bytes =
+                client.get(uri!(super::stream)).dispatch().await.into_bytes().await.unwrap();
+            assert_eq!(&bytes[..8], b"Hi world");
+        };
+
+        join!(
+            async {
+                sleep_ms(250).await; // time to establish `listener` connection 
+                server.await;
+                sleep_ms(250).await; // time to graceful shutdown
+
+                client.rocket().shutdown().notify();
+            },
+            listener
+        );
     }
 }
