@@ -56,7 +56,7 @@ async fn call(
         format!("{}.rs", COUNT.fetch_add(1, Ordering::SeqCst))
     }
 
-    let file = scripts.cache.entry_by_ref(call.main.as_ref()).or_insert_with(unique_rs()).await;
+    let file = scripts.cache.entry_by_ref(call.code.as_ref()).or_insert_with(unique_rs()).await;
     let (out, bytes) = script::execute_in(
         (&env::current_dir()?.join(CRATES), &file.into_value()),
         call.into_inner(), // keep formatting
@@ -94,7 +94,7 @@ struct Scripts {
 }
 
 #[rocket::launch]
-fn launch() -> _ {
+fn rocket() -> _ {
     #[get("/init")]
     fn init() {}
 
@@ -114,6 +114,7 @@ fn launch() -> _ {
 //  which will lead to a loss of minimalism
 #[cfg(test)]
 mod tests {
+    use json::{json, Value};
     use {
         rocket::{http::Status, local::blocking::Client, uri},
         std::time::Duration,
@@ -132,6 +133,10 @@ mod tests {
                 $("data": $args)?
             })
         }};
+    }
+
+    fn rocket() -> Client {
+        Client::tracked(super::rocket()).expect("valid rocket instance")
     }
 
     #[test]
@@ -160,7 +165,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn hello() {
-        let client = Client::tracked(super::launch()).expect("valid rocket instance");
+        let client = rocket();
 
         let res = client
             .post(uri!(super::call))
@@ -172,7 +177,25 @@ mod tests {
             .dispatch();
 
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_json::<String>().unwrap(), "Hi world");
+        assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn forbid_stdout() {
+        let client = rocket();
+
+        let res = client
+            .post(uri!(super::call))
+            .json(&json!({
+                "code": r#"fn main(():()) {
+                    println!("Hello, World!")
+                }"#
+            }))
+            .dispatch();
+
+        assert_eq!(res.status(), Status::UnprocessableEntity);
+        assert!(res.into_string().unwrap().contains("print to `stdout` doesn't make sense"));
     }
 
     #[tokio::test]
@@ -180,7 +203,7 @@ mod tests {
     async fn io_stream() {
         use rocket::local::asynchronous::Client;
 
-        let client = Client::tracked(super::launch()).await.expect("valid rocket instance");
+        let client = Client::tracked(super::rocket()).await.expect("valid rocket instance");
         let sleep_ms = |ms| time::sleep(Duration::from_millis(ms));
 
         let server = async {
