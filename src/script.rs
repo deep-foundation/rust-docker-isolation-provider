@@ -43,7 +43,7 @@ pub fn expand(src: &str, [from, to]: [&str; 2]) -> String {
 pub async fn execute_in(
     (path, file): (&Path, &str),
     Call { head: _head, code, data }: Call<'_>,
-) -> Result<String, Error> {
+) -> Result<(String, Vec<u8>), Error> {
     let _ = fs::create_dir(path).await;
 
     fs::write(path.join(file), expand(TEMPLATE, ["#{main}", &code])).await?;
@@ -56,7 +56,7 @@ pub async fn execute_in(
         .await?;
 
     if out.status.success() {
-        Ok(String::from_utf8(out.stdout)?)
+        Ok((String::from_utf8(out.stdout)?, out.stderr))
     } else {
         Err(Error::Compiler(String::from_utf8(out.stderr)?))
     }
