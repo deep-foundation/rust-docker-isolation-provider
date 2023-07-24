@@ -1,0 +1,67 @@
+#![allow(incomplete_features, unused_macros)]
+#![feature(specialization)]
+
+use wasm_bindgen::prelude::*;
+
+macro_rules! js {
+  ([$($args:ident : $types:ty),* $(,)?] -> $ty:ty { $($block:tt)* } ) => {{
+    async move {
+      let x: $ty = { __embed_js::js_impl! { $($args : $types),* => $ty => $($block)* }}.await;
+      x
+    }
+  }};
+}
+
+mod __respond {
+    use serde::{Serialize, Serializer};
+
+    #[derive(Serialize)]
+    pub struct Infallible {}
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "lowercase")]
+    enum Respond<T, E> {
+        Resolved(T),
+        Rejected(E),
+    }
+
+    pub trait Responder {
+        fn respond_to<S: Serializer>(self, serializer: S) -> Option<S::Error>;
+        // where (on believe)
+        //     S: Serializer<Ok = ()>;
+    }
+
+    impl<T: Serialize> Responder for T {
+        default fn respond_to<S: Serializer>(self, serializer: S) -> Option<S::Error> {
+            Respond::<_, Infallible>::Resolved(self).serialize(serializer).err()
+        }
+    }
+
+    impl<T: Serialize, E: Serialize> Responder for Result<T, E> {
+        fn respond_to<S: Serializer>(self, serializer: S) -> Option<S::Error> {
+            match self {
+                Ok(ok) => Respond::Resolved(ok),
+                Err(err) => Respond::Rejected(err),
+            }
+                .serialize(serializer)
+                .err()
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub async fn __provider_main(args: String) -> String {
+    console_error_panic_hook::set_once();
+
+    let args = serde_json::from_str(&args).unwrap(); // one error - one panic
+
+    #{main}
+
+    let mut serializer = serde_json::Serializer::new(Vec::with_capacity(128));
+    if let Some(_err) = __respond::Responder::respond_to(main(args).await, &mut serializer) {
+        todo!("`Vec` (probably) will not produce `IO` errors")
+    }
+
+    // Safety: json is always UTF-8
+    unsafe { String::from_utf8_unchecked(serializer.into_inner()) }
+}
