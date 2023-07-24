@@ -43,8 +43,8 @@ mod __respond {
                 Ok(ok) => Respond::Resolved(ok),
                 Err(err) => Respond::Rejected(err),
             }
-                .serialize(serializer)
-                .err()
+            .serialize(serializer)
+            .err()
         }
     }
 }
