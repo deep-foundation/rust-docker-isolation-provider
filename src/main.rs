@@ -1,4 +1,5 @@
-#![allow(clippy::let_unit_value)] // false positive: https://github.com/SergioBenitez/Rocket/issues/2568
+#![allow(clippy::let_unit_value)]
+// false positive: https://github.com/SergioBenitez/Rocket/issues/2568
 
 mod script;
 
@@ -53,13 +54,16 @@ async fn call(
     static COUNT: AtomicUsize = AtomicUsize::new(0);
 
     async fn unique_rs() -> String {
-        format!("{}.rs", COUNT.fetch_add(1, Ordering::SeqCst))
+        format!("_{}", COUNT.fetch_add(1, Ordering::SeqCst))
     }
 
     let file = scripts.cache.entry_by_ref(call.code.as_ref()).or_insert_with(unique_rs()).await;
-    let (out, bytes) = script::execute_in(
+    let mut bytes = Vec::with_capacity(128);
+
+    let out = script::execute_in(
         (&env::current_dir()?.join(CRATES), &file.into_value()),
-        call.into_inner(), // keep formatting
+        call.into_inner(),
+        &mut bytes,
     )
     .await?;
 
@@ -114,8 +118,8 @@ fn rocket() -> _ {
 //  which will lead to a loss of minimalism
 #[cfg(test)]
 mod tests {
-    use json::{json, Value};
     use {
+        json::{json, Value},
         rocket::{http::Status, local::blocking::Client, uri},
         std::time::Duration,
         tokio::{join, time},
