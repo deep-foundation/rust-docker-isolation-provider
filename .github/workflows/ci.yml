@@ -25,6 +25,7 @@ jobs:
         with:
           toolchain: nightly
       - run: cargo install rust-script
+      - run: cargo install wasm-pack
       - run: cargo +${{matrix.rust}} test
 
   build:
