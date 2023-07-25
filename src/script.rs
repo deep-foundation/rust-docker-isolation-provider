@@ -69,10 +69,11 @@ pub async fn execute_in(
     }
 
     let _ = troo! { "wasm-pack" => "build" "--target" "nodejs" "--dev" dir };
-    let _ = troo! {
-        if cfg!(target_os = "windows") { "npm.cmd" } else { "npm" }
-            => "install" "-g" "@deep-foundation/deeplinks"
-    };
+    // fixme: maybe install one time in Docker image?
+    // let _ = troo! {
+    //     if cfg!(target_os = "windows") { "npm.cmd" } else { "npm" }
+    //         => "install" "-g" "@deep-foundation/deeplinks"
+    // };
 
     let out = troo! {
         "node" => dir.join("mod.mjs") data.get()

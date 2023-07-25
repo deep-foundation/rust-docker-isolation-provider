@@ -49,6 +49,51 @@ mod __respond {
     }
 }
 
+macro_rules! __std_error {
+    () => {
+        compile_error!(
+            "print to `std{err, out}` forbidden in `wasm32-unknown-unknown`, \
+             Instead it return any impl `Serialize` from `main`."
+        );
+    };
+}
+
+macro_rules! print {
+    ($($tt:tt)*) => {{
+        __std_error!();
+        if false {
+            std::print!($($tt)*);
+        }
+    }};
+}
+
+macro_rules! println {
+    ($($tt:tt)*) => {{
+        __std_error!();
+        if false {
+            std::println!($($tt)*);
+        }
+    }};
+}
+
+macro_rules! eprint {
+    ($($tt:tt)*) => {{
+        __std_error!();
+        if false {
+            std::print!($($tt)*);
+        }
+    }};
+}
+
+macro_rules! eprintln {
+    ($($tt:tt)*) => {{
+        __std_error!();
+        if false {
+            std::println!($($tt)*);
+        }
+    }};
+}
+
 #[wasm_bindgen]
 pub async fn __provider_main(args: String) -> String {
     console_error_panic_hook::set_once();

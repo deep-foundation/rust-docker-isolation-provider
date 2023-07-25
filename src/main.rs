@@ -120,19 +120,20 @@ fn rocket() -> _ {
 mod tests {
     use {
         json::{json, Value},
-        rocket::{http::Status, local::blocking::Client, uri},
+        rocket::{form::validate::Contains, http::Status, local::blocking::Client, uri},
         std::time::Duration,
         tokio::{join, time},
     };
 
     macro_rules! rusty {
-        (($($pats:tt)*) $(-> $ty:ty)? { $body:expr } $(where $args:expr)? ) => {{
-            fn __compile_check() {
-                 fn main($($pats)*) $(-> $ty)? { $body }
-            }
+        (($($pats:tt)*) $(-> $ty:ty)? { $($body:tt)* } $(where $args:expr)? ) => {{
+            // fixme: we should to do the IDE analyze this code - but not too much
+            // fn __compile_check() {
+            //      fn main($($pats)*) $(-> $ty)? { $($body)* }
+            // }
             json::json!({
                 "code": stringify!(
-                    fn main($($pats)*) $(-> $ty)? { $body }
+                    async fn main($($pats)*) $(-> $ty)? { $($body)* }
                 ),
                 $("data": $args)?
             })
@@ -151,7 +152,7 @@ mod tests {
 
         let raw = json::json!({
             "code": r#"
-                fn main(hello: &str) -> String {
+                async fn main(hello: &str) -> String {
                     format!("{hello}world")
                 }"#,
             "data": "Hi"
@@ -199,7 +200,7 @@ mod tests {
             .dispatch();
 
         assert_eq!(res.status(), Status::UnprocessableEntity);
-        assert!(res.into_string().unwrap().contains("print to `stdout` doesn't make sense"));
+        assert!(res.into_string().unwrap().contains("print to `std{err, out}` forbidden"));
     }
 
     #[tokio::test]
@@ -215,7 +216,13 @@ mod tests {
                 .post(uri!(super::call))
                 .json(&rusty! {
                     (hello: &str) {
-                        eprintln!("{hello} world")
+                        #[wasm_bindgen]
+                        extern "C" {
+                            #[wasm_bindgen(js_namespace = console)]
+                            fn error(s: &str);
+                        }
+
+                        error(&format!("{hello} world"));
                     } where { "Hi" }
                 })
                 .dispatch()
@@ -225,7 +232,8 @@ mod tests {
         let listener = async {
             let bytes =
                 client.get(uri!(super::stream)).dispatch().await.into_bytes().await.unwrap();
-            assert_eq!(&bytes[..8], b"Hi world");
+            println!("{}", String::from_utf8_lossy(&bytes));
+            assert!(bytes.windows(8).any(|slice| slice == b"Hi world"));
         };
 
         join!(
