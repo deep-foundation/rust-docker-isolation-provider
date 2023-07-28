@@ -3,15 +3,6 @@
 
 use wasm_bindgen::prelude::*;
 
-macro_rules! js {
-  ([$($args:ident : $types:ty),* $(,)?] -> $ty:ty { $($block:tt)* } ) => {{
-    async move {
-      let x: $ty = { __embed_js::js_impl! { $($args : $types),* => $ty => $($block)* }}.await;
-      x
-    }
-  }};
-}
-
 mod __respond {
     use serde::{Serialize, Serializer};
 
@@ -92,6 +83,25 @@ macro_rules! eprintln {
             std::println!($($tt)*);
         }
     }};
+}
+
+macro_rules! js {
+  (|$($args:ident),* $(,)?| $($block:tt)* ) => {{
+    async move {
+      let x = { __embed_js::js_impl! { $($args),* => $($block)* }}.await;
+      x
+    }
+  }};
+}
+
+trait __FromJsMacro: Sized {
+    fn from(js: JsValue) -> Self;
+}
+
+impl<T: serde::de::DeserializeOwned> __FromJsMacro for T {
+    fn from(js: JsValue) -> Self {
+        serde_wasm_bindgen::from_value(js).unwrap()
+    }
 }
 
 #[wasm_bindgen]

@@ -1,7 +1,7 @@
 #![feature(try_blocks)]
 
 use {
-    proc_macro2::{Span, TokenStream},
+    proc_macro2::{Ident, Span, TokenStream},
     quote::{format_ident, quote},
     std::{
         env, fs, io,
@@ -11,24 +11,23 @@ use {
         parse::{Parse, ParseStream},
         parse_macro_input,
         punctuated::Punctuated,
+        token::Token,
         Error, FnArg, Token, Type,
     },
 };
 
 #[derive(Debug)]
 struct Input {
-    sig: (Punctuated<FnArg, Token![,]>, Type),
+    sig: Punctuated<Ident, Token![,]>,
     block: TokenStream,
 }
 
 impl Parse for Input {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let args = Punctuated::parse_separated_nonempty(input)?;
-        let _: Token![=>] = input.parse()?;
-        let ret = input.parse()?;
+        let sig = Punctuated::parse_terminated(input).unwrap_or_default();
         let _: Token![=>] = input.parse()?;
 
-        Ok(Self { sig: (args, ret), block: input.parse()? })
+        Ok(Self { sig, block: input.parse()? })
     }
 }
 
@@ -38,21 +37,16 @@ pub fn js_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let unique = UNIQUE.fetch_add(1, Ordering::SeqCst);
     let ident = format_ident!("__some_prefix_{unique}");
-    let Input { sig: (args, ret), block } = parse_macro_input!(input as Input);
+    let Input { sig, block } = parse_macro_input!(input as Input);
 
-    let names = args.iter().map(|arg| match arg {
-        FnArg::Receiver(_) => unreachable!(),
-        FnArg::Typed(ty) => &ty.pat,
-    });
     let err: io::Result<_> = try {
         let path = env::current_dir()?.join("_jsauto_cache");
         let _ = fs::create_dir(&path);
 
-        let names = names.clone();
         fs::write(
             path.join(&format!("{ident}.js")),
             quote!(
-                module.exports.#ident = async function(#(#names),*) {
+                module.exports.#ident = async function(#sig) {
                     #block
                 }
             )
@@ -65,25 +59,15 @@ pub fn js_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 
     let path = format!("/_jsauto_cache/{ident}.js");
-    let ext = quote!(
+    quote!(
         #[wasm_bindgen(module = #path)]
         extern "C" {
-            async fn #ident(#args) -> wasm_bindgen::JsValue;
+            async fn #ident(#sig) -> wasm_bindgen::JsValue;
         }
-    );
 
-    let into = if quote!(#ret).to_string() == quote!(JsValue).to_string() {
-        quote!( async move { #ident(#(#names),*).await } )
-    } else {
-        quote! {
-            async move {
-                serde_wasm_bindgen::from_value::<#ret>(#ident(#(#names),*).await).unwrap()
-            }
+        async move {
+            __FromJsMacro::from(#ident(#sig).await)
         }
-    };
-
-    quote!(
-        #ext #into
     )
     .into()
 }
