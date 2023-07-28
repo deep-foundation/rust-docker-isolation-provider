@@ -104,6 +104,16 @@ impl<T: serde::de::DeserializeOwned> __FromJsMacro for T {
     }
 }
 
+trait __IntoJsMacro: Sized {
+    fn into(self) -> JsValue;
+}
+
+impl<T: serde::Serialize> __IntoJsMacro for T {
+    fn into(self) -> JsValue {
+        serde_wasm_bindgen::to_value(&self).unwrap()
+    }
+}
+
 #[wasm_bindgen]
 pub async fn __provider_main(args: String) -> String {
     console_error_panic_hook::set_once();

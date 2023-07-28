@@ -11,8 +11,7 @@ use {
         parse::{Parse, ParseStream},
         parse_macro_input,
         punctuated::Punctuated,
-        token::Token,
-        Error, FnArg, Token, Type,
+        Error, Token,
     },
 };
 
@@ -24,7 +23,7 @@ struct Input {
 
 impl Parse for Input {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let sig = Punctuated::parse_terminated(input).unwrap_or_default();
+        let sig = Punctuated::parse_separated_nonempty(input).unwrap_or_default();
         let _: Token![=>] = input.parse()?;
 
         Ok(Self { sig, block: input.parse()? })
@@ -59,14 +58,15 @@ pub fn js_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 
     let path = format!("/_jsauto_cache/{ident}.js");
+    let (ser, de) = (sig.iter(), sig.iter());
     quote!(
         #[wasm_bindgen(module = #path)]
         extern "C" {
-            async fn #ident(#sig) -> wasm_bindgen::JsValue;
+            async fn #ident(#(#ser: wasm_bindgen::JsValue),*) -> wasm_bindgen::JsValue;
         }
 
         async move {
-            __FromJsMacro::from(#ident(#sig).await)
+            __FromJsMacro::from(#ident(#(__IntoJsMacro::into(#de)),*).await)
         }
     )
     .into()
