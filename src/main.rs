@@ -203,7 +203,7 @@ mod tests {
             .dispatch();
 
         assert_eq!(res.status(), Status::UnprocessableEntity);
-        assert!(res.into_string().unwrap().contains("print to `std{err, out}` forbidden"));
+        assert!(dbg!(res.into_string()).unwrap().contains("print to `std{err, out}` forbidden"));
     }
 
     #[tokio::test]
@@ -235,7 +235,6 @@ mod tests {
         let listener = async {
             let bytes =
                 client.get(uri!(super::stream)).dispatch().await.into_bytes().await.unwrap();
-            println!("{}", String::from_utf8_lossy(&bytes));
             assert!(bytes.windows(8).any(|slice| slice == b"Hi world"));
         };
 
