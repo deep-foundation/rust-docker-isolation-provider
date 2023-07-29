@@ -181,11 +181,8 @@ mod tests {
             })
             .dispatch();
 
-        if res.status() == Status::Ok {
-            assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }))
-        } else {
-            panic!("{:?}", res.into_string());
-        }
+        assert_eq!(res.status(), Status::Ok);
+        assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }))
     }
 
     #[test]
@@ -203,7 +200,7 @@ mod tests {
             .dispatch();
 
         assert_eq!(res.status(), Status::UnprocessableEntity);
-        assert!(dbg!(res.into_string()).unwrap().contains("print to `std{err, out}` forbidden"));
+        assert!(res.into_string().unwrap().contains("print to `std{err, out}` forbidden"));
     }
 
     #[tokio::test]
