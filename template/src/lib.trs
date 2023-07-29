@@ -92,6 +92,12 @@ macro_rules! js {
       x
     }
   }};
+  ($(||)? $($block:tt)* ) => {{
+    async move {
+      let x = { __embed_js::js_impl! { => $($block)* }}.await;
+      x
+    }
+  }};
 }
 
 trait __FromJsMacro: Sized {
