@@ -24,7 +24,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
-      - run: cargo install rust-script
+      - run: rustup target add wasm32-unknown-unknown
       - run: cargo install wasm-pack
       - run: cargo +${{matrix.rust}} test
 
