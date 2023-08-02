@@ -135,7 +135,7 @@ pub async fn __provider_main(args: String, jwt: Option<String>) -> String {
     let main = __main_attr! { #{main} };
 
     let mut serializer = serde_json::Serializer::new(Vec::with_capacity(128));
-    if let Some(_err) = __respond::Responder::respond_to(main((args, jwt)).await, &mut serializer) {
+    if let Some(_err) = __respond::Responder::respond_to(main(args, jwt).await, &mut serializer) {
         todo!("`Vec` (probably) will not produce `IO` errors")
     }
 
