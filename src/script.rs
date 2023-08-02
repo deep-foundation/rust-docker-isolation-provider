@@ -42,7 +42,7 @@ pub fn expand(src: &str, [from, to]: [&str; 2]) -> String {
 
 pub async fn execute_in(
     (path, file): (&Path, &str),
-    Call { head: _head, code, data }: Call<'_>,
+    Call { jwt, code, data }: Call<'_>,
     stderr: &mut Vec<u8>,
 ) -> Result<String, Error> {
     let dir = path.join(file);
@@ -76,7 +76,7 @@ pub async fn execute_in(
     // };
 
     let out = troo! {
-        "node" => dir.join("mod.mjs") data.get()
+        "node" => dir.join("mod.mjs") data.get() jwt.unwrap_or("")
     };
     Ok(String::from_utf8(out).unwrap())
 }

@@ -25,8 +25,7 @@ use rocket::{get, post, routes};
 
 #[derive(serde::Deserialize)]
 pub struct Call<'a> {
-    #[serde(borrow, default)]
-    head: borrow::Cow<'a, str>,
+    jwt: Option<&'a str>,
 
     #[serde(borrow)]
     code: borrow::Cow<'a, str>,
