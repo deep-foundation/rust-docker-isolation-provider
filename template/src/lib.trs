@@ -1,0 +1,148 @@
+#![allow(incomplete_features, unused_macros)]
+#![feature(specialization, async_closure)]
+
+use wasm_bindgen::prelude::*;
+
+mod __respond {
+    use serde::{Serialize, Serializer};
+
+    #[derive(Serialize)]
+    pub struct Infallible {}
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "lowercase")]
+    enum Respond<T, E> {
+        Resolved(T),
+        Rejected(E),
+    }
+
+    pub trait Responder {
+        fn respond_to<S: Serializer>(self, serializer: S) -> Option<S::Error>;
+        // where (on believe)
+        //     S: Serializer<Ok = ()>;
+    }
+
+    impl<T: Serialize> Responder for T {
+        default fn respond_to<S: Serializer>(self, serializer: S) -> Option<S::Error> {
+            Respond::<_, Infallible>::Resolved(self).serialize(serializer).err()
+        }
+    }
+
+    impl<T: Serialize, E: Serialize> Responder for Result<T, E> {
+        fn respond_to<S: Serializer>(self, serializer: S) -> Option<S::Error> {
+            match self {
+                Ok(ok) => Respond::Resolved(ok),
+                Err(err) => Respond::Rejected(err),
+            }
+            .serialize(serializer)
+            .err()
+        }
+    }
+}
+
+macro_rules! __std_error {
+    () => {
+        compile_error!(
+            "print to `std{err, out}` forbidden in `wasm32-unknown-unknown`, \
+             Instead it return any impl `Serialize` from `main`."
+        );
+    };
+}
+
+macro_rules! print {
+    ($($tt:tt)*) => {{
+        __std_error!();
+        if false {
+            std::print!($($tt)*);
+        }
+    }};
+}
+
+macro_rules! println {
+    ($($tt:tt)*) => {{
+        __std_error!();
+        if false {
+            std::println!($($tt)*);
+        }
+    }};
+}
+
+macro_rules! eprint {
+    ($($tt:tt)*) => {{
+        __std_error!();
+        if false {
+            std::print!($($tt)*);
+        }
+    }};
+}
+
+macro_rules! eprintln {
+    ($($tt:tt)*) => {{
+        __std_error!();
+        if false {
+            std::println!($($tt)*);
+        }
+    }};
+}
+
+macro_rules! js {
+  (|$($args:ident),* $(,)?| $($block:tt)* ) => {{
+    async move {
+      let x = { __embed_js::js_impl! { $($args),* => $($block)* }}.await;
+      x
+    }
+  }};
+  ($(||)? $($block:tt)* ) => {{
+    async move {
+      let x = { __embed_js::js_impl! { => $($block)* }}.await;
+      x
+    }
+  }};
+}
+
+trait __FromJsMacro: Sized {
+    fn from(js: JsValue) -> Self;
+}
+
+impl<T: serde::de::DeserializeOwned> __FromJsMacro for T {
+    fn from(js: JsValue) -> Self {
+        serde_wasm_bindgen::from_value(js).unwrap()
+    }
+}
+
+trait __IntoJsMacro: Sized {
+    fn into(self) -> JsValue;
+}
+
+impl<T: serde::Serialize> __IntoJsMacro for T {
+    fn into(self) -> JsValue {
+        serde_wasm_bindgen::to_value(&self).unwrap()
+    }
+}
+
+macro_rules! __main_attr {
+    (for { $ser:expr }
+     where { $($params:expr),* }
+    async fn main($($args:tt)*) $(-> $ty:ty)? { $($body:tt)* }) => {{
+        let ret $(: $ty)? = (async move |$($args)*| { $($body)* })($($params),*).await;
+        __respond::Responder::respond_to(ret, $ser)
+    }};
+}
+
+#[wasm_bindgen]
+pub async fn __provider_main(args: String, jwt: Option<String>) -> String {
+    console_error_panic_hook::set_once();
+
+    let mut serializer = serde_json::Serializer::new(Vec::with_capacity(128));
+    let args = serde_json::from_str(&args).unwrap(); // one error - one panic
+
+    __main_attr! {
+        for { &mut serializer } where { args, jwt }
+
+        #{main}
+    }
+    .map(|_err| todo!("`Vec` (probably) will not produce `IO` errors"));
+
+    // Safety: json is always UTF-8
+    unsafe { String::from_utf8_unchecked(serializer.into_inner()) }
+}

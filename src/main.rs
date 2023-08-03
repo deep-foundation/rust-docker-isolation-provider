@@ -1,4 +1,5 @@
-#![allow(clippy::let_unit_value)] // false positive: https://github.com/SergioBenitez/Rocket/issues/2568
+#![allow(clippy::let_unit_value)]
+// false positive: https://github.com/SergioBenitez/Rocket/issues/2568
 
 mod script;
 
@@ -24,8 +25,7 @@ use rocket::{get, post, routes};
 
 #[derive(serde::Deserialize)]
 pub struct Call<'a> {
-    #[serde(borrow, default)]
-    head: borrow::Cow<'a, str>,
+    jwt: Option<&'a str>,
 
     #[serde(borrow)]
     code: borrow::Cow<'a, str>,
@@ -53,13 +53,16 @@ async fn call(
     static COUNT: AtomicUsize = AtomicUsize::new(0);
 
     async fn unique_rs() -> String {
-        format!("{}.rs", COUNT.fetch_add(1, Ordering::SeqCst))
+        format!("_{}", COUNT.fetch_add(1, Ordering::SeqCst))
     }
 
     let file = scripts.cache.entry_by_ref(call.code.as_ref()).or_insert_with(unique_rs()).await;
-    let (out, bytes) = script::execute_in(
+    let mut bytes = Vec::with_capacity(128);
+
+    let out = script::execute_in(
         (&env::current_dir()?.join(CRATES), &file.into_value()),
-        call.into_inner(), // keep formatting
+        call.into_inner(),
+        &mut bytes,
     )
     .await?;
 
@@ -114,21 +117,22 @@ fn rocket() -> _ {
 //  which will lead to a loss of minimalism
 #[cfg(test)]
 mod tests {
-    use json::{json, Value};
     use {
-        rocket::{http::Status, local::blocking::Client, uri},
+        json::{json, Value},
+        rocket::{form::validate::Contains, http::Status, local::blocking::Client, uri},
         std::time::Duration,
         tokio::{join, time},
     };
 
     macro_rules! rusty {
-        (($($pats:tt)*) $(-> $ty:ty)? { $body:expr } $(where $args:expr)? ) => {{
-            fn __compile_check() {
-                 fn main($($pats)*) $(-> $ty)? { $body }
-            }
+        (($($pats:tt)*) $(-> $ty:ty)? { $($body:tt)* } $(where $args:expr)? ) => {{
+            // fixme: we should to do the IDE analyze this code - but not too much
+            // fn __compile_check() {
+            //      fn main($($pats)*) $(-> $ty)? { $($body)* }
+            // }
             json::json!({
                 "code": stringify!(
-                    fn main($($pats)*) $(-> $ty)? { $body }
+                    async fn main($($pats)*) $(-> $ty)? { $($body)* }
                 ),
                 $("data": $args)?
             })
@@ -147,7 +151,7 @@ mod tests {
 
         let raw = json::json!({
             "code": r#"
-                fn main(hello: &str) -> String {
+                async fn main(hello: &str) -> String {
                     format!("{hello}world")
                 }"#,
             "data": "Hi"
@@ -155,7 +159,7 @@ mod tests {
 
         let rusty = rusty! {
             (hello: &str) -> String {
-                format!("{hello} world")
+                format!("{hello}world")
             } where { "Hi" }
         };
 
@@ -170,14 +174,14 @@ mod tests {
         let res = client
             .post(uri!(super::call))
             .json(&rusty! {
-                (hello: &str) -> String {
+                (hello: &str, _jwt: _) -> String {
                     format!("{hello} world")
                 } where { "Hi" }
             })
             .dispatch();
 
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }));
+        assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }))
     }
 
     #[test]
@@ -187,15 +191,15 @@ mod tests {
 
         let res = client
             .post(uri!(super::call))
-            .json(&json!({
-                "code": r#"fn main(():()) {
+            .json(&rusty! {
+                (():(), _:_) {
                     println!("Hello, World!")
-                }"#
-            }))
+                }
+            })
             .dispatch();
 
         assert_eq!(res.status(), Status::UnprocessableEntity);
-        assert!(res.into_string().unwrap().contains("print to `stdout` doesn't make sense"));
+        assert!(res.into_string().unwrap().contains("print to `std{err, out}` forbidden"));
     }
 
     #[tokio::test]
@@ -210,8 +214,14 @@ mod tests {
             client
                 .post(uri!(super::call))
                 .json(&rusty! {
-                    (hello: &str) {
-                        eprintln!("{hello} world")
+                    (hello: &str, _jwt: _) {
+                        #[wasm_bindgen]
+                        extern "C" {
+                            #[wasm_bindgen(js_namespace = console)]
+                            fn error(s: &str);
+                        }
+
+                        error(&format!("{hello} world"));
                     } where { "Hi" }
                 })
                 .dispatch()
@@ -221,7 +231,7 @@ mod tests {
         let listener = async {
             let bytes =
                 client.get(uri!(super::stream)).dispatch().await.into_bytes().await.unwrap();
-            assert_eq!(&bytes[..8], b"Hi world");
+            assert!(bytes.windows(8).any(|slice| slice == b"Hi world"));
         };
 
         join!(
