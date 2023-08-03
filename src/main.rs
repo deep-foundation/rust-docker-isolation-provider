@@ -118,7 +118,7 @@ fn rocket() -> _ {
 #[cfg(test)]
 mod tests {
     use {
-        //Ejson::{json, Value},
+        json::{json, Value},
         rocket::{form::validate::Contains, http::Status, local::blocking::Client, uri},
         std::time::Duration,
         tokio::{join, time},
