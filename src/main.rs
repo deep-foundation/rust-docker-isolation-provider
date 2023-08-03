@@ -174,7 +174,7 @@ mod tests {
         let res = client
             .post(uri!(super::call))
             .json(&rusty! {
-                (hello: &str) -> String {
+                (hello: &str, jwt: _) -> String {
                     format!("{hello} world")
                 } where { "Hi" }
             })
@@ -191,11 +191,11 @@ mod tests {
 
         let res = client
             .post(uri!(super::call))
-            .json(&json!({
-                "code": r#"fn main(():()) {
+            .json(&rusty! {
+                (():(), _:_) {
                     println!("Hello, World!")
-                }"#
-            }))
+                }
+            })
             .dispatch();
 
         assert_eq!(res.status(), Status::UnprocessableEntity);
@@ -214,7 +214,7 @@ mod tests {
             client
                 .post(uri!(super::call))
                 .json(&rusty! {
-                    (hello: &str) {
+                    (hello: &str, jwt: _) {
                         #[wasm_bindgen]
                         extern "C" {
                             #[wasm_bindgen(js_namespace = console)]
