@@ -159,7 +159,7 @@ mod tests {
 
         let rusty = rusty! {
             (hello: &str) -> String {
-                format!("{hello} world")
+                format!("{hello}world")
             } where { "Hi" }
         };
 
@@ -174,15 +174,14 @@ mod tests {
         let res = client
             .post(uri!(super::call))
             .json(&rusty! {
-                (hello: &str, jwt: _) -> String {
+                (hello: &str, _jwt: _) -> String {
                     format!("{hello} world")
                 } where { "Hi" }
             })
             .dispatch();
 
-        panic!("{:?}", res.into_string());
-        // assert_eq!(res.status(), Status::Ok);
-        // assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }))
+        assert_eq!(res.status(), Status::Ok);
+        assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }))
     }
 
     #[test]
@@ -215,7 +214,7 @@ mod tests {
             client
                 .post(uri!(super::call))
                 .json(&rusty! {
-                    (hello: &str, jwt: _) {
+                    (hello: &str, _jwt: _) {
                         #[wasm_bindgen]
                         extern "C" {
                             #[wasm_bindgen(js_namespace = console)]
