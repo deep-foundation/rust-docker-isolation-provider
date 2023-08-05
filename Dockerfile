@@ -10,19 +10,21 @@ RUN \
     --mount=type=cache,target=/app/target \
   cargo install --path . --profile docker
 
-FROM rustlang/rust:nightly-alpine
+FROM node:alpine as node
+WORKDIR /app
 
-RUN apk add --update nodejs npm build-base && \
-  cargo install rust-script && \
-  cargo install wasm-pack
+RUN npm install @deep-foundation/deeplinks --prefix ./
 
+FROM rustlang/rust:nightly-alpine 
 WORKDIR /app
 
 RUN chmod 777 /app/
-COPY --from=rust /app/template ./template
+COPY --from=node /app/node_modules ./crates/node_modules 
 COPY --from=rust /usr/local/cargo/bin/rust-docker-isolation-provider .
+COPY --from=rust /app/template ./template
 
-RUN npm install @deep-foundation/deeplinks --prefix ./crates/
+RUN apk add --update nodejs npm build-base && \ 
+    cargo install wasm-pack
 
 # `Rocket.toml` to change the port: https://rocket.rs/v0.5-rc/guide/configuration
 ENV ROCKET_ADDRESS=0.0.0.0
