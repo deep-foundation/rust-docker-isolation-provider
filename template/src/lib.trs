@@ -123,7 +123,8 @@ impl<T: serde::Serialize> __IntoJsMacro for T {
 macro_rules! __main_attr {
     (for { $ser:expr }
      where { $($params:expr),* }
-    async fn main($($args:tt)*) $(-> $ty:ty)? { $($body:tt)* }) => {{
+
+    async ($($args:tt)*) $(-> $ty:ty)? { $($body:tt)* }) => {{
         let ret $(: $ty)? = (async move |$($args)*| { $($body)* })($($params),*).await;
         __respond::Responder::respond_to(ret, $ser)
     }};

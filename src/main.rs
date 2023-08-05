@@ -140,7 +140,7 @@ mod tests {
             json::json!({
                 "params": {
                     "code": stringify!(
-                        async fn main($($pats)*) $(-> $ty)? { $($body)* }
+                        async ($($pats)*) $(-> $ty)? { $($body)* }
                     ),
                     $("data": $args)?
                 }
@@ -161,8 +161,8 @@ mod tests {
         let raw = json::json!({
             "params": {
                 "code": r#"
-                    async fn main(hello: &str) -> String {
-                        format!("{hello}world")
+                    async (hello: &str) -> String {
+                        format!("{hello} world")
                     }"#,
                 "data": "Hi"
             }
@@ -170,7 +170,7 @@ mod tests {
 
         let rusty = rusty! {
             (hello: &str) -> String {
-                format!("{hello}world")
+                format!("{hello} world")
             } where { "Hi" }
         };
 
