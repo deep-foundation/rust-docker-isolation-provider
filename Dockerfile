@@ -24,7 +24,7 @@ COPY --from=rust /usr/local/cargo/bin/rust-docker-isolation-provider .
 COPY --from=rust /app/template ./template
 
 RUN apk add --update nodejs npm build-base && \ 
-    cargo install wasm-pack
+    cargo install wasm-pack; rustup target add wasm32-unknown-unknown
 
 # `Rocket.toml` to change the port: https://rocket.rs/v0.5-rc/guide/configuration
 ENV ROCKET_ADDRESS=0.0.0.0
