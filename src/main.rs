@@ -21,7 +21,10 @@ use {
     },
 };
 
-use rocket::{get, post, routes};
+#[derive(serde::Deserialize)]
+struct Params<T> {
+    params: T,
+}
 
 #[derive(serde::Deserialize)]
 pub struct Call<'a> {
@@ -46,22 +49,24 @@ const CRATES: &str = "crates";
 
 #[post("/call", data = "<call>")]
 async fn call(
-    call: Json<Call<'_>>,
+    call: Json<Params<Call<'_>>>,
     scripts: &State<Scripts>,
     tx: &State<Sender<Vec<u8>>>,
 ) -> Result<RawJson<String>, script::Error> {
-    static COUNT: AtomicUsize = AtomicUsize::new(0);
-
-    async fn unique_rs() -> String {
+    fn unique_rs() -> String {
+        static COUNT: AtomicUsize = AtomicUsize::new(0);
         format!("_{}", COUNT.fetch_add(1, Ordering::SeqCst))
     }
 
-    let file = scripts.cache.entry_by_ref(call.code.as_ref()).or_insert_with(unique_rs()).await;
+    let Params { params: call } = call.into_inner();
+
+    let file =
+        scripts.cache.entry_by_ref(call.code.as_ref()).or_insert_with(async { unique_rs() }).await;
     let mut bytes = Vec::with_capacity(128);
 
     let out = script::execute_in(
         (&env::current_dir()?.join(CRATES), &file.into_value()),
-        call.into_inner(),
+        call,
         &mut bytes,
     )
     .await?;
@@ -95,6 +100,8 @@ fn stream(stream: &State<Sender<Vec<u8>>>, mut end: Shutdown) -> ByteStream![Vec
 struct Scripts {
     pub cache: Cache<String, String>,
 }
+
+use rocket::{get, post, routes};
 
 #[rocket::launch]
 fn rocket() -> _ {
@@ -131,10 +138,12 @@ mod tests {
             //      fn main($($pats)*) $(-> $ty)? { $($body)* }
             // }
             json::json!({
-                "code": stringify!(
-                    async fn main($($pats)*) $(-> $ty)? { $($body)* }
-                ),
-                $("data": $args)?
+                "params": {
+                    "code": stringify!(
+                        async fn main($($pats)*) $(-> $ty)? { $($body)* }
+                    ),
+                    $("data": $args)?
+                }
             })
         }};
     }
@@ -145,16 +154,18 @@ mod tests {
 
     #[test]
     fn rusty() {
-        fn clean(json: json::Value) -> String {
+        fn clean(json: Value) -> String {
             json.to_string().replace(char::is_whitespace, "").replace("\\n", "")
         }
 
         let raw = json::json!({
-            "code": r#"
-                async fn main(hello: &str) -> String {
-                    format!("{hello}world")
-                }"#,
-            "data": "Hi"
+            "params": {
+                "code": r#"
+                    async fn main(hello: &str) -> String {
+                        format!("{hello}world")
+                    }"#,
+                "data": "Hi"
+            }
         });
 
         let rusty = rusty! {
