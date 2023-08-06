@@ -176,7 +176,8 @@ async fn deep(token: Option<String>) -> Js {
 
 struct Ctx<T> {
     data: T,
-    deep: Js,
+    // deep: Js,
+    jwt: Option<String>
 }
 
 #[wasm_bindgen]
@@ -187,7 +188,7 @@ pub async fn __provider_main(args: String, jwt: Option<String>) -> String {
     let args = serde_json::from_str(&args).unwrap(); // one error - one panic
 
     __main_attr! {
-        for { &mut serializer } where { Ctx { data: args, deep: deep(jwt).await } }
+        for { &mut serializer } where { Ctx { data: args, jwt , /* deep: deep(jwt).await */ } }
 
         #{main}
     }

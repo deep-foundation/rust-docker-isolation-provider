@@ -192,7 +192,7 @@ mod tests {
         let res = client
             .post(uri!(super::call))
             .json(&rusty! {
-                (hello: &str, _jwt: _) -> String {
+                (Ctx { data: hello, .. }: Ctx<&str>) -> String {
                     format!("{hello} world")
                 } where { "Hi" }
             })
@@ -210,7 +210,7 @@ mod tests {
         let res = client
             .post(uri!(super::call))
             .json(&rusty! {
-                (():(), _:_) {
+                (Ctx { data: (), .. }: Ctx<_>) {
                     println!("Hello, World!")
                 }
             })
@@ -232,7 +232,7 @@ mod tests {
             client
                 .post(uri!(super::call))
                 .json(&rusty! {
-                    (hello: &str, _jwt: _) {
+                    (Ctx { data: hello, .. }: Ctx<&str>) {
                         #[wasm_bindgen]
                         extern "C" {
                             #[wasm_bindgen(js_namespace = console)]
