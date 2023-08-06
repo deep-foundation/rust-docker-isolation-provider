@@ -134,6 +134,51 @@ macro_rules! __main_attr {
     }};
 }
 
+struct Js(pub JsValue);
+
+impl __IntoJsMacro for Js {
+    fn into(self) -> JsValue {
+        self.0
+    }
+}
+
+impl __FromJsMacro for Js {
+    fn from(js: JsValue) -> Self {
+        Js(js)
+    }
+}
+
+async fn deep(token: Option<String>) -> Js {
+    js!(|token| {
+        const {generateApolloClient} = await import("@deep-foundation/hasura/client.js");
+        const {DeepClient, parseJwt} = await import("@deep-foundation/deeplinks/imports/client.js");
+
+        const GQL_URN = process.env.GQL_URN || "localhost:3006/gql";
+        const GQL_SSL = process.env.GQL_SSL || 0;
+
+
+        if (!token) throw new Error("No token provided");
+        const decoded = parseJwt(token);
+        const linkId = decoded?.userId;
+        const apolloClient = generateApolloClient({
+          path: GQL_URN,
+          ssl: !!+GQL_SSL,
+          token,
+        });
+        const deepClient = new DeepClient({ apolloClient, linkId, token });
+        deepClient.import = async (path) => {
+            return module = await import(path)
+        };
+        return deepClient;
+    })
+    .await
+}
+
+struct Ctx<T> {
+    data: T,
+    deep: Js,
+}
+
 #[wasm_bindgen]
 pub async fn __provider_main(args: String, jwt: Option<String>) -> String {
     console_error_panic_hook::set_once();
@@ -142,7 +187,7 @@ pub async fn __provider_main(args: String, jwt: Option<String>) -> String {
     let args = serde_json::from_str(&args).unwrap(); // one error - one panic
 
     __main_attr! {
-        for { &mut serializer } where { args, jwt }
+        for { &mut serializer } where { Ctx { data: args, deep: deep(jwt).await } }
 
         #{main}
     }

@@ -13,7 +13,8 @@ RUN \
 FROM node:alpine as node
 WORKDIR /app
 
-RUN npm install @deep-foundation/deeplinks --prefix ./
+RUN npm install @deep-foundation/deeplinks --prefix ./; \
+    npm install @deep-foundation/hasura    --prefix ./
 
 FROM rustlang/rust:nightly-alpine 
 WORKDIR /app
