@@ -8,7 +8,7 @@ RUN apk add --update musl-dev
 RUN \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
-  cargo install --path . --profile docker
+  RUSTFLAGS="--cfg docker_image" cargo install --path . --profile docker
 
 FROM node:alpine as node
 WORKDIR /app
@@ -23,10 +23,9 @@ COPY --from=node /app/node_modules ./crates/node_modules
 COPY --from=rust /usr/local/cargo/bin/rust-docker-isolation-provider .
 COPY --from=rust /app/template ./template
 
-RUN apk add --update nodejs npm build-base && \ 
-    cargo install wasm-pack; rustup target add wasm32-unknown-unknown
+RUN apk add --update nodejs npm build-base 
+RUN cargo install wasm-pack; rustup target add wasm32-unknown-unknown
 
-# `Rocket.toml` to change the port: https://rocket.rs/v0.5-rc/guide/configuration
 ENV ROCKET_ADDRESS=0.0.0.0
 EXPOSE 8000
 
