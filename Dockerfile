@@ -27,7 +27,6 @@ RUN apk add --update nodejs npm build-base
 RUN cargo install wasm-pack; rustup target add wasm32-unknown-unknown
 
 ENV ROCKET_ADDRESS=0.0.0.0
-EXPOSE 8000
 
 CMD ["/app/rust-docker-isolation-provider"]
 
