@@ -148,7 +148,7 @@ impl __FromJsMacro for Js {
     }
 }
 
-pub async fn deep(token: Option<String>) -> Js {
+async fn deep_impl(token: String) -> Js {
     js!(|token| {
         const {generateApolloClient} = await import("@deep-foundation/hasura/client.js");
         const {DeepClient, parseJwt} = await import("@deep-foundation/deeplinks/imports/client.js");
@@ -174,10 +174,13 @@ pub async fn deep(token: Option<String>) -> Js {
     .await
 }
 
+pub async fn deep(token: Option<String>) -> Js {
+    if let Some(token) = token { deep_impl(token).await } else { Js(JsValue::NULL) }
+}
+
 pub struct Ctx<T> {
     pub data: T,
-    // deep: Js,
-    pub jwt: Option<String>
+    pub deep: Js,
 }
 
 #[wasm_bindgen]
@@ -188,7 +191,7 @@ pub async fn __provider_main(args: String, jwt: Option<String>) -> String {
     let args = serde_json::from_str(&args).unwrap(); // one error - one panic
 
     __main_attr! {
-        for { &mut serializer } where { Ctx { data: args, jwt , /* deep: deep(jwt).await */ } }
+        for { &mut serializer } where { Ctx { data: args, deep: deep(jwt).await } }
 
         #{main}
     }
