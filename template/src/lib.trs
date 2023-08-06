@@ -124,7 +124,11 @@ macro_rules! __main_attr {
     (for { $ser:expr }
      where { $($params:expr),* }
 
+    $(use $path:path;)*
+
     async ($($args:tt)*) $(-> $ty:ty)? { $($body:tt)* }) => {{
+        $(use $path;)*
+
         let ret $(: $ty)? = (async move |$($args)*| { $($body)* })($($params),*).await;
         __respond::Responder::respond_to(ret, $ser)
     }};
