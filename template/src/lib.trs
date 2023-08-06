@@ -134,7 +134,7 @@ macro_rules! __main_attr {
     }};
 }
 
-struct Js(pub JsValue);
+pub struct Js(pub JsValue);
 
 impl __IntoJsMacro for Js {
     fn into(self) -> JsValue {
@@ -148,7 +148,7 @@ impl __FromJsMacro for Js {
     }
 }
 
-async fn deep(token: Option<String>) -> Js {
+pub async fn deep(token: Option<String>) -> Js {
     js!(|token| {
         const {generateApolloClient} = await import("@deep-foundation/hasura/client.js");
         const {DeepClient, parseJwt} = await import("@deep-foundation/deeplinks/imports/client.js");
@@ -174,10 +174,10 @@ async fn deep(token: Option<String>) -> Js {
     .await
 }
 
-struct Ctx<T> {
-    data: T,
+pub struct Ctx<T> {
+    pub data: T,
     // deep: Js,
-    jwt: Option<String>
+    pub jwt: Option<String>
 }
 
 #[wasm_bindgen]
