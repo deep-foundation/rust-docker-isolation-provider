@@ -7,9 +7,10 @@ use {
     json::value::RawValue,
     moka::future::Cache,
     rocket::{
+        figment::providers::Env,
         response::{content::RawJson, stream::ByteStream},
         serde::json::Json,
-        Shutdown, State,
+        Config, Shutdown, State,
     },
     std::{
         borrow, env, mem,
@@ -113,7 +114,13 @@ fn rocket() -> _ {
         "Service is up and running"
     }
 
-    rocket::build()
+    let figment = if cfg!(docker_image) {
+        Config::figment().merge(Env::raw().only(&["port"]))
+    } else {
+        Config::figment()
+    };
+
+    rocket::custom(figment)
         .manage(channel::<Vec<u8>>(1024).0)
         .manage(Scripts { cache: Cache::new(8096) })
         .mount("/", routes![init, health, call, stream])
