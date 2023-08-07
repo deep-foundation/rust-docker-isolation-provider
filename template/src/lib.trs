@@ -182,6 +182,7 @@ pub async fn deep(token: Option<String>) -> Option<JsValue> {
     if let Some(token) = token { Some(deep_impl(token).await) } else { None }
 }
 
+#[non_exhaustive]
 pub struct Ctx<T> {
     pub data: T,
     pub deep: Option<JsValue>,
