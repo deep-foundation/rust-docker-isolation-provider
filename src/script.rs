@@ -1,6 +1,6 @@
 use {
     fs_extra::dir::CopyOptions,
-    std::{env, fs, path::Path},
+    std::{env, fmt, fs, path::Path},
 };
 
 use {
@@ -15,6 +15,15 @@ use {
 pub enum Error {
     Internal(Box<dyn std::error::Error + Sync + Send>), // to avoid `anyhow` as dependency
     Compiler(String),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::Internal(err) => write!(f, "{err}"),
+            Error::Compiler(err) => write!(f, "{err}"),
+        }
+    }
 }
 
 impl<'r, 'o: 'r> Responder<'r, 'o> for Error {

@@ -43,6 +43,10 @@ fn raw_null() -> &'static RawValue {
     unsafe { mem::transmute::<&str, _>("null") }
 }
 
+fn eat_str<T: ToString>(me: T) -> String {
+    me.to_string()
+}
+
 // todo: possible to use in config, it is very easy:
 //  - https://rocket.rs/v0.5-rc/guide/configuration/#configuration
 //  - https://crates.io/keywords/configuration
@@ -70,12 +74,16 @@ async fn call(
         call,
         &mut bytes,
     )
-    .await?;
+    .await
+    .map_err(eat_str);
 
     // A send 'fails' if there are no active subscribers. That's okay.
     let _ = tx.send(bytes);
 
-    Ok(RawJson(out))
+    Ok(RawJson(match out {
+        Ok(res) => res,
+        Err(err) => format!("{{\"rejected\": {}}}", json::json!(err)),
+    }))
 }
 
 #[get("/stream")]
@@ -216,8 +224,11 @@ mod tests {
             })
             .dispatch();
 
-        assert_eq!(res.status(), Status::UnprocessableEntity);
-        assert!(res.into_string().unwrap().contains("print to `std{err, out}` forbidden"));
+        assert_eq!(res.status(), Status::Ok);
+
+        let text = res.into_string().unwrap();
+        assert!(text[1..].starts_with("\"rejected\""));
+        assert!(text.contains("print to `std{err, out}` forbidden"));
     }
 
     #[tokio::test]
