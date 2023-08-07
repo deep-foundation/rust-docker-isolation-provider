@@ -100,25 +100,43 @@ macro_rules! js {
   }};
 }
 
-trait __FromJsMacro: Sized {
-    fn from(js: JsValue) -> Self;
-}
+mod __convert {
+    use {
+        std::fmt::Debug,
+        wasm_bindgen::prelude::{
+            soft::{FromJs, IntoJs},
+            JsValue,
+        },
+    };
 
-impl<T: serde::de::DeserializeOwned> __FromJsMacro for T {
-    fn from(js: JsValue) -> Self {
-        serde_wasm_bindgen::from_value(js).unwrap()
+    pub trait __FromJsMacro: Sized {
+        fn from(js: JsValue) -> Self;
+    }
+
+    impl<T: FromJs> __FromJsMacro for T
+    where
+        <T as FromJs>::Err: Debug,
+    {
+        fn from(js: JsValue) -> Self {
+            FromJs::from(js).unwrap()
+        }
+    }
+
+    pub trait __IntoJsMacro: Sized {
+        fn into(self) -> JsValue;
+    }
+
+    impl<T: IntoJs> __IntoJsMacro for T
+    where
+        <T as IntoJs>::Err: Debug,
+    {
+        fn into(self) -> JsValue {
+            IntoJs::into(self).unwrap()
+        }
     }
 }
 
-trait __IntoJsMacro: Sized {
-    fn into(self) -> JsValue;
-}
-
-impl<T: serde::Serialize> __IntoJsMacro for T {
-    fn into(self) -> JsValue {
-        serde_wasm_bindgen::to_value(&self).unwrap()
-    }
-}
+pub use __convert::{__FromJsMacro, __IntoJsMacro};
 
 macro_rules! __main_attr {
     (for { $ser:expr }
@@ -134,21 +152,7 @@ macro_rules! __main_attr {
     }};
 }
 
-pub struct Js(pub JsValue);
-
-impl __IntoJsMacro for Js {
-    fn into(self) -> JsValue {
-        self.0
-    }
-}
-
-impl __FromJsMacro for Js {
-    fn from(js: JsValue) -> Self {
-        Js(js)
-    }
-}
-
-async fn deep_impl(token: String) -> Js {
+async fn deep_impl(token: String) -> JsValue {
     js!(|token| {
         const {generateApolloClient} = await import("@deep-foundation/hasura/client.js");
         const {DeepClient, parseJwt} = await import("@deep-foundation/deeplinks/imports/client.js");
@@ -174,13 +178,13 @@ async fn deep_impl(token: String) -> Js {
     .await
 }
 
-pub async fn deep(token: Option<String>) -> Js {
-    if let Some(token) = token { deep_impl(token).await } else { Js(JsValue::NULL) }
+pub async fn deep(token: Option<String>) -> Option<JsValue> {
+    if let Some(token) = token { Some(deep_impl(token).await) } else { None }
 }
 
 pub struct Ctx<T> {
     pub data: T,
-    pub deep: Js,
+    pub deep: Option<JsValue>,
 }
 
 #[wasm_bindgen]
