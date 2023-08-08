@@ -75,7 +75,9 @@ pub async fn execute_in(
                 stderr.extend(out.stderr);
                 (out.stdout, instant.elapsed())
             } else {
-                return Err(Error::Compiler(String::from_utf8(out.stderr).unwrap()));
+                let err = String::from_utf8(out.stderr).unwrap();
+                tracing::error!("{err}");
+                return Err(Error::Compiler(err));
             }
         }};
     }

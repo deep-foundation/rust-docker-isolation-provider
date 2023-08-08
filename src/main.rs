@@ -1,5 +1,4 @@
 #![allow(clippy::let_unit_value)] // false pos.: https://github.com/SergioBenitez/Rocket/issues/2568
-#![feature(result_option_inspect)]
 
 mod script;
 
