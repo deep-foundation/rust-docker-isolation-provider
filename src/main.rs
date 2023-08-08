@@ -1,5 +1,5 @@
-#![allow(clippy::let_unit_value)]
-// false positive: https://github.com/SergioBenitez/Rocket/issues/2568
+#![allow(clippy::let_unit_value)] // false pos.: https://github.com/SergioBenitez/Rocket/issues/2568
+#![feature(result_option_inspect)]
 
 mod script;
 
@@ -21,6 +21,7 @@ use {
         select,
         sync::broadcast::{channel, error::RecvError, Sender},
     },
+    tracing::*,
 };
 
 #[derive(serde::Deserialize)]
@@ -73,15 +74,12 @@ async fn call(
     #[cfg(feature = "pretty-trace")]
     match syn::parse_str::<syn::Expr>(src) {
         Ok(fmt) => {
+            let tab = "\n      ";
             if cfg!(feature = "pretty-trace") {
-                let tab = "\n      ";
-                tracing::info!(
-                    "Provided code:{tab}{}",
-                    prettyplease::unparse_expr(&fmt).replace('\n', tab)
-                );
+                info!("Provided code:{tab}{}", prettyplease::unparse_expr(&fmt).replace('\n', tab));
             }
         }
-        Err(err) => tracing::warn!("{err}"),
+        Err(err) => warn!("{err}"),
     }
 
     let out = script::execute_in(
