@@ -75,8 +75,8 @@ async fn call(
         Ok(fmt) => {
             if cfg!(feature = "pretty-trace") {
                 tracing::info!(
-                    "Provided code:{}",
-                    format!("\n{}", prettyplease::unparse_expr(&fmt)).replace('\n', "\n      ")
+                    "Provided code:\n      {}",
+                    prettyplease::unparse_expr(&fmt).replace('\n', "\n      ")
                 );
             }
         }
