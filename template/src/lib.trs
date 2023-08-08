@@ -138,20 +138,6 @@ mod __convert {
 
 pub use __convert::{__FromJsMacro, __IntoJsMacro};
 
-macro_rules! __main_attr {
-    (for { $ser:expr }
-     where { $($params:expr),* }
-
-    $(use $path:path;)*
-
-    async ($($args:tt)*) $(-> $ty:ty)? { $($body:tt)* }) => {{
-        $(use $path;)*
-
-        let ret $(: $ty)? = (async move |$($args)*| { $($body)* })($($params),*).await;
-        __respond::Responder::respond_to(ret, $ser)
-    }};
-}
-
 async fn deep_impl(token: String) -> JsValue {
     js!(|token| {
         const {generateApolloClient} = await import("@deep-foundation/hasura/client.js");
@@ -182,10 +168,23 @@ pub async fn deep(token: Option<String>) -> Option<JsValue> {
     if let Some(token) = token { Some(deep_impl(token).await) } else { None }
 }
 
-#[non_exhaustive]
 pub struct Ctx<T> {
     pub data: T,
     pub deep: Option<JsValue>,
+}
+
+macro_rules! __main_attr {
+    (for { $ser:expr }
+     where { $($params:expr),* }
+
+    $(use $path:path;)*
+
+    async $($sig:tt)*) => {{
+        $(use $path;)*
+
+        let ret = (async move $($sig)*)($($params),*).await;
+        __respond::Responder::respond_to(ret, $ser)
+    }};
 }
 
 #[wasm_bindgen]

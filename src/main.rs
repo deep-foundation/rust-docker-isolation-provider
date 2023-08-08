@@ -4,6 +4,7 @@
 mod script;
 
 use {
+    chrono::Local,
     json::value::RawValue,
     moka::future::Cache,
     rocket::{
@@ -13,7 +14,7 @@ use {
         Config, Shutdown, State,
     },
     std::{
-        borrow, env, mem,
+        borrow, env, fmt, mem,
         sync::atomic::{AtomicUsize, Ordering},
     },
     tokio::{
@@ -65,9 +66,22 @@ async fn call(
 
     let Params { params: call } = call.into_inner();
 
-    let file =
-        scripts.cache.entry_by_ref(call.code.as_ref()).or_insert_with(async { unique_rs() }).await;
+    let src = call.code.as_ref();
     let mut bytes = Vec::with_capacity(128);
+    let file = scripts.cache.entry_by_ref(src).or_insert_with(async { unique_rs() }).await;
+
+    #[cfg(feature = "pretty-trace")]
+    match syn::parse_str::<syn::Expr>(src) {
+        Ok(fmt) => {
+            if cfg!(feature = "pretty-trace") {
+                tracing::info!(
+                    "Provided code:{}",
+                    format!("\n{}", prettyplease::unparse_expr(&fmt)).replace('\n', "\n      ")
+                );
+            }
+        }
+        Err(err) => tracing::warn!("{err}"),
+    }
 
     let out = script::execute_in(
         (&env::current_dir()?.join(CRATES), &file.into_value()),
@@ -114,12 +128,21 @@ use rocket::{get, post, routes};
 
 #[rocket::launch]
 fn rocket() -> _ {
-    #[get("/init")]
+    #[post("/init")]
     fn init() {}
 
     #[get("/healthz")]
     fn health() -> &'static str {
         "Service is up and running"
+    }
+
+    use tracing_subscriber::fmt::format::Writer;
+
+    let timer: fn(&mut Writer<'_>) -> fmt::Result =
+        |w| write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S"));
+
+    if cfg!(not(test)) {
+        tracing_subscriber::fmt().pretty().with_timer(timer).with_target(false).init();
     }
 
     let figment = if cfg!(docker_image) {
@@ -155,7 +178,7 @@ mod tests {
             json::json!({
                 "params": {
                     "code": stringify!(
-                        async ($($pats)*) $(-> $ty)? { $($body)* }
+                        async |$($pats)*| $(-> $ty)? { $($body)* }
                     ),
                     $("data": $args)?
                 }
@@ -176,7 +199,7 @@ mod tests {
         let raw = json::json!({
             "params": {
                 "code": r#"
-                    async (hello: &str) -> String {
+                    async |hello: &str| -> String {
                         format!("{hello} world")
                     }"#,
                 "data": "Hi"
