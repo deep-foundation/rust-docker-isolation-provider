@@ -66,7 +66,7 @@ pub fn js_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
 
         async move {
-            __FromJsMacro::from(#ident(#(__IntoJsMacro::into(#de)),*).await)
+            __FromJsMacro::__from(#ident(#(__IntoJsMacro::__into(#de)),*).await)
         }
     )
     .into()

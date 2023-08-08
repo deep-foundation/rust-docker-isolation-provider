@@ -110,27 +110,27 @@ mod __convert {
     };
 
     pub trait __FromJsMacro: Sized {
-        fn from(js: JsValue) -> Self;
+        fn __from(js: JsValue) -> Self;
     }
 
     impl<T: FromJs> __FromJsMacro for T
     where
         <T as FromJs>::Err: Debug,
     {
-        fn from(js: JsValue) -> Self {
+        fn __from(js: JsValue) -> Self {
             FromJs::from(js).unwrap()
         }
     }
 
     pub trait __IntoJsMacro: Sized {
-        fn into(self) -> JsValue;
+        fn __into(self) -> JsValue;
     }
 
     impl<T: IntoJs> __IntoJsMacro for T
     where
         <T as IntoJs>::Err: Debug,
     {
-        fn into(self) -> JsValue {
+        fn __into(self) -> JsValue {
             IntoJs::into(self).unwrap()
         }
     }
