@@ -74,9 +74,10 @@ async fn call(
     match syn::parse_str::<syn::Expr>(src) {
         Ok(fmt) => {
             if cfg!(feature = "pretty-trace") {
+                let tab = "\n      ";
                 tracing::info!(
-                    "Provided code:\n      {}",
-                    prettyplease::unparse_expr(&fmt).replace('\n', "\n      ")
+                    "Provided code:{tab}{}",
+                    prettyplease::unparse_expr(&fmt).replace('\n', tab)
                 );
             }
         }
