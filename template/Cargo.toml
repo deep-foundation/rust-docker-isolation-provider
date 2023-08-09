@@ -21,3 +21,6 @@ __embed_js = { package = "embed", path = "./embed" }
 
 [patch.crates-io]
 wasm-bindgen = { git = "https://github.com/uselessgoddess/wasm-bindgen" }
+
+[profile.release]
+debug = true

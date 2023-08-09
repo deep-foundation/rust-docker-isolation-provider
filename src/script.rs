@@ -61,28 +61,28 @@ pub async fn execute_in(
     let _ = fs::create_dir(path);
     let _ = fs::create_dir(&dir);
 
-    fs_extra::dir::copy(env::current_dir().unwrap().join("template"), &dir, &options()).unwrap();
+    fs_extra::dir::copy(env::current_dir()?.join("template"), &dir, &options())?;
 
     let dir = dir.join("template");
-    fs::write(dir.join("src/lib.rs"), expand(TEMPLATE, ["#{main}", &code])).unwrap();
+    fs::write(dir.join("src/lib.rs"), expand(TEMPLATE, ["#{main}", &code]))?;
 
     macro_rules! troo {
         ($exec:expr => $($args:expr)*) => {{
             let instant = Instant::now();
             let out = tokio::process::Command::new($exec)
-                $(.arg(AsRef::<std::ffi::OsStr>::as_ref(&$args)))* .output().await.unwrap();
+                $(.arg(AsRef::<std::ffi::OsStr>::as_ref(&$args)))* .output().await?;
             if out.status.success() {
                 stderr.extend(out.stderr);
                 (out.stdout, instant.elapsed())
             } else {
-                let err = String::from_utf8(out.stderr).unwrap();
+                let err = String::from_utf8(out.stderr)?;
                 tracing::error!("{err}");
                 return Err(Error::Compiler(err));
             }
         }};
     }
 
-    let (_, elapsed) = troo! { "wasm-pack" => "build" "--target" "nodejs" "--dev" dir };
+    let (_, elapsed) = troo! { "wasm-pack" => "build" "--target" "nodejs" dir };
     info!("Compilation time: {elapsed:?}");
 
     // fixme: maybe install one time in Docker image?
@@ -96,7 +96,7 @@ pub async fn execute_in(
     };
     info!("Execution time: {elapsed:?}");
 
-    Ok(String::from_utf8(out).unwrap())
+    Ok(String::from_utf8(out)?)
 }
 
 fn options() -> CopyOptions {
