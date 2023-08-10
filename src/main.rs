@@ -1,5 +1,6 @@
 #![allow(clippy::let_unit_value)] // false pos.: https://github.com/SergioBenitez/Rocket/issues/2568
 
+mod parse;
 mod script;
 
 use {
@@ -12,6 +13,7 @@ use {
         serde::json::Json,
         Config, Shutdown, State,
     },
+    serde::{de::Error, Deserialize, Deserializer},
     std::{
         borrow, env, fmt, mem,
         sync::atomic::{AtomicUsize, Ordering},
@@ -32,11 +34,17 @@ struct Params<T> {
 pub struct Call<'a> {
     jwt: Option<&'a str>,
 
-    #[serde(borrow)]
-    code: borrow::Cow<'a, str>,
+    #[serde(deserialize_with = "manifesty")]
+    code: (String, String),
 
     #[serde(borrow, default = "raw_null")]
     data: &'a RawValue,
+}
+
+fn manifesty<'de, D: Deserializer<'de>>(deserializer: D) -> Result<(String, String), D::Error> {
+    parse::extract_manifest(<borrow::Cow<str> as Deserialize>::deserialize(deserializer)?.as_ref())
+        .map(|(a, b)| (a.into(), b.into()))
+        .map_err(Error::custom)
 }
 
 fn raw_null() -> &'static RawValue {
@@ -66,7 +74,7 @@ async fn call(
 
     let Params { params: call } = call.into_inner();
 
-    let src = call.code.as_ref();
+    let (_, src) = &call.code;
     let mut bytes = Vec::with_capacity(128);
     let file = scripts.cache.entry_by_ref(src).or_insert_with(async { unique_rs() }).await;
 

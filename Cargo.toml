@@ -10,6 +10,8 @@ serde = { version = "1.0", features = ["derive"] }
 
 rocket = { version = "=0.5.0-rc.3", features = ["json"] }
 json = { version = "1.0", package = "serde_json", features = ["raw_value"] }
+toml = { version = "0.7.6" }
+winnow = { version = "0.5.1" }
 fs_extra = { version = "1.3.0" }
 
 chrono = { version = "0.4.26" }

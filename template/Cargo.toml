@@ -23,4 +23,5 @@ __embed_js = { package = "embed", path = "./embed" }
 wasm-bindgen = { git = "https://github.com/uselessgoddess/wasm-bindgen" }
 
 [profile.release]
+incremental = true
 debug = true
