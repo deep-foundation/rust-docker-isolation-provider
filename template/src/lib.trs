@@ -168,7 +168,7 @@ pub async fn deep(token: Option<String>) -> Option<JsValue> {
     if let Some(token) = token { Some(deep_impl(token).await) } else { None }
 }
 
-pub struct Ctx<T> {
+pub struct Ctx<T = serde_json::Value> {
     pub data: T,
     pub deep: Option<JsValue>,
 }
