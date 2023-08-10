@@ -8,7 +8,7 @@ use {
         Request,
     },
     std::{env, fmt, fs, path::Path, time::Instant},
-    toml::{toml, Table},
+    toml::Table,
     tracing::info,
 };
 

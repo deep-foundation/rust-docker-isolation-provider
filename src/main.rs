@@ -22,7 +22,7 @@ use {
         select,
         sync::broadcast::{channel, error::RecvError, Sender},
     },
-    tracing::*,
+    tracing::{info, warn},
 };
 
 #[derive(serde::Deserialize)]
