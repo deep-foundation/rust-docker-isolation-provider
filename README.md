@@ -26,12 +26,12 @@ async |_: Ctx| {} // dynamic json + type inference
 async |_| {} // short 
 ```
 
-### `js!` macro
+### [`js!`](https://github.com/deep-foundation/rust-docker-isolation-provider/blob/main/template/embed/src/lib.rs#L34-L73) macro
 It allow to execute any JS snippet like this (now only in the async form):
 ```rust
 async |Ctx { data: (a, b), .. }: Ctx<(i32, i32)>| -> i32 {
-    // macro depends from type inference
-    // so we just must provide type                  ^^^
+    // macro depends on the type inference
+    // so we just have to provide type               ^^^
     js!(|a, b| { // `a` and `b` are implicit captures
         console.error(a, b);
         return a + b;
