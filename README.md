@@ -1,22 +1,46 @@
+# Rust provider
+
 Any handler is an asynchronous closure of the following signature `Fn(Ctx<impl Deserialize>) -> Serialize`.\
 Where [`Ctx`](https://github.com/deep-foundation/rust-docker-isolation-provider/blob/main/template/src/lib.trs#L171-L174)
 is:
 
 ```rust
 struct Ctx<T> {
-    pub data: T,
-    // impl Deserialize
-    pub deep: Option<JsValue>, // null if `jwt` not provided
+    pub data: T, // impl `Deserialize`
+    pub deep: Option<JsValue>, // `None` if `jwt` not provided
 }
 ```
 
 ```rust
 use serde_json as json;
 
-async |Ctx { .. }: Ctx<json::Value>| {
+// Hello world handler in general form
+async |Ctx { _data, _deep, .. }: Ctx<json::Value>| {
     2 + 2
 }
 ```
+#### Other handlers signatures 
+```rust
+async |_: Ctx<T>| -> U {} // full typed 
+async |_: Ctx| {} // dynamic json + type inference 
+async |_| {} // short 
+```
+
+### `js!` macro
+It allow to execute any JS snippet like this (now only in the async form):
+```rust
+async |Ctx { data: (a, b), .. }: Ctx<(i32, i32)>| -> i32 {
+    // macro depends from type inference
+    // so we just must provide type                  ^^^
+    js!(|a, b| { // `a` and `b` are implicit captures
+        console.error(a, b);
+        return a + b;
+    })
+    .await 
+}
+```
+
+### Manifest forwarding
 
 By default, the handler has `serde` and `serde_json` in its dependencies. They can be overridden, or new ones can be
 added using the syntax:

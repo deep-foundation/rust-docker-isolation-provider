@@ -54,7 +54,7 @@ fn extract_impl<'i>(input: &mut Input<'i>) -> PResult<&'i str> {
         cut_err((
             lit("cargo"),
             lit(":"),
-            limited.context(Ctx::Expected(Description("`{ ... }` block"))),
+            limited.context(Ctx::Expected(Description("`{ .. }` block"))),
         )),
     )
         .map(|(_, (_, _, output))| output)

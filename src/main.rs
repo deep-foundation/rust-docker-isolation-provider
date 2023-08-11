@@ -247,7 +247,7 @@ mod tests {
         let res = client
             .post(uri!(super::call))
             .json(&rusty! {
-                (Ctx { data: (), .. }: Ctx<_>) {
+                (_nothing) {
                     println!("Hello, World!")
                 }
             })

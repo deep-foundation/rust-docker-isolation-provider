@@ -173,16 +173,21 @@ pub struct Ctx<T = serde_json::Value> {
     pub deep: Option<JsValue>,
 }
 
+macro_rules! __entry {
+    (async |$ident:ident| $($tail:tt)*) => { async move |$ident: Ctx| $($tail)* };
+    (async $($tail:tt)*) => { async move $($tail)* };
+}
+
 macro_rules! __main_attr {
     (for { $ser:expr }
      where { $($params:expr),* }
 
     $(use $path:path;)*
 
-    async $($sig:tt)*) => {{
+    async $($entry:tt)*) => {{
         $(use $path;)*
 
-        let ret = (async move $($sig)*)($($params),*).await;
+        let ret = __entry!(async $($entry)*)($($params),*).await;
         __respond::Responder::respond_to(ret, $ser)
     }};
 }
@@ -196,6 +201,8 @@ pub async fn __provider_main(args: String, jwt: Option<String>) -> String {
 
     __main_attr! {
         for { &mut serializer } where { Ctx { data: args, deep: deep(jwt).await } }
+
+        use serde_json::Value;
 
         #{main}
     }
