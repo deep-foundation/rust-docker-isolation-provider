@@ -40,6 +40,14 @@ async |Ctx { data: (a, b), .. }: Ctx<(i32, i32)>| -> i32 {
 }
 ```
 
+#### [`DeepClient`](https://github.com/deep-foundation/deeplinks/blob/main/imports/client.tsx) automatically will construct from provided [jwt](https://github.com/deep-foundation/js-docker-isolation-provider#js-docker-isolation-provider) and will provided as `Option<JsValue>`
+```rust
+async |Ctx { deep, .. }: Ctx| {
+    let deep = JsValue::from(deep); // `Option<JsValue>` into `JsValue`
+    let () = js!(|deep| await deep.insert({})).await;
+}
+```
+
 ### Manifest forwarding
 
 By default, the handler has `serde` and `serde_json` in its dependencies. They can be overridden, or new ones can be
