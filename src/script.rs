@@ -14,7 +14,7 @@ use {
 
 #[derive(Debug)]
 pub enum Error {
-    Internal(Box<dyn std::error::Error + Sync + Send>), // to avoid `anyhow` as dependency
+    Internal(Box<dyn std::error::Error + Sync + Send>),
     Compiler(String),
 }
 
@@ -71,8 +71,8 @@ pub async fn execute_in(
     let dir = dir.join("template");
     fs::write(dir.join("src/lib.rs"), expand(TEMPLATE, ["#{main}", &src]))?;
 
-    if !manifest.is_empty() {
-        fs::write(dir.join("Cargo.toml"), merge_manifest(CARGO.parse()?, manifest.parse()?)?)?;
+    if let Some(manifest) = manifest {
+        fs::write(dir.join("Cargo.toml"), merge_manifest(CARGO.parse()?, manifest)?)?;
     }
 
     macro_rules! troo {

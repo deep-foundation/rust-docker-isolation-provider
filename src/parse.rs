@@ -61,16 +61,19 @@ fn extract_impl<'i>(input: &mut Input<'i>) -> PResult<&'i str> {
         .parse_next(input)
 }
 
-pub fn extract_manifest(mut src: &str) -> Result<(&str, &str), String> {
+use {anyhow::Result, toml::Table};
+
+pub fn extract_manifest(mut src: &str) -> Result<(Option<Table>, &str)> {
     match extract_impl(&mut src) {
-        Err(ErrMode::Cut(err)) => Err(err.to_string()), // error when parsing manifest
-        Err(_) => Ok(("", src)),                        // can't find manifest section
-        Ok(ok) => Ok((ok, src)),
+        Err(ErrMode::Cut(err)) => anyhow::bail!("{err}"), // error when parsing manifest
+        Err(_) => Ok((None, src)),                        // can't find manifest section
+        Ok(ok) => Ok((Some(ok.parse()?), src)),
     }
 }
 
 // fixme: add `winnom` inner tests
 #[test]
 fn simple_extract() {
-    assert_eq!(extract_manifest("where cargo: {empty} TAIL"), Ok(("empty", " TAIL")))
+    assert_eq!(extract_manifest("where cargo: {  } TAIL").unwrap(), (Some(Table::new()), " TAIL"));
+    assert_eq!(extract_manifest("TAIL").unwrap(), (None, "TAIL"));
 }

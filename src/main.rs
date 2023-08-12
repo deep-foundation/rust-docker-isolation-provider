@@ -15,7 +15,8 @@ use {
     },
     serde::{de::Error, Deserialize, Deserializer},
     std::{
-        borrow, env, fmt, mem,
+        borrow::Cow,
+        env, fmt, mem,
         sync::atomic::{AtomicUsize, Ordering},
     },
     tokio::{
@@ -35,16 +36,22 @@ pub struct Call<'a> {
     jwt: Option<&'a str>,
 
     #[serde(deserialize_with = "manifesty")]
-    code: (String, String),
+    code: (Option<toml::Table>, Cow<'a, str>),
 
     #[serde(borrow, default = "raw_null")]
     data: &'a RawValue,
 }
 
-fn manifesty<'de, D: Deserializer<'de>>(deserializer: D) -> Result<(String, String), D::Error> {
-    parse::extract_manifest(<borrow::Cow<str> as Deserialize>::deserialize(deserializer)?.as_ref())
-        .map(|(a, b)| (a.into(), b.into()))
-        .map_err(Error::custom)
+fn manifesty<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<(Option<toml::Table>, Cow<'de, str>), D::Error> {
+    use Cow::{Borrowed, Owned};
+
+    match Cow::deserialize(deserializer)? {
+        Borrowed(src) => parse::extract_manifest(src).map(|(a, b)| (a, Borrowed(b))),
+        Owned(ref str) => parse::extract_manifest(str).map(|(a, b)| (a, Owned(b.to_owned()))),
+    }
+    .map_err(Error::custom)
 }
 
 fn raw_null() -> &'static RawValue {
@@ -74,7 +81,7 @@ async fn call(
 
     let Params { params: call } = call.into_inner();
 
-    let (_, src) = &call.code;
+    let src = call.code.1.as_ref();
     let mut bytes = Vec::with_capacity(128);
     let file = scripts.cache.entry_by_ref(src).or_insert_with(async { unique_rs() }).await;
 
@@ -86,7 +93,7 @@ async fn call(
                 info!("Provided code:{tab}{}", prettyplease::unparse_expr(&fmt).replace('\n', tab));
             }
         }
-        Err(err) => warn!("{err}"),
+        Err(err) => warn!("Possible error syntax: {err}"),
     }
 
     let out = script::execute_in(
