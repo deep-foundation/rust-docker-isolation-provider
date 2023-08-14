@@ -13,7 +13,7 @@ use {
     serde::{de::Error, Deserialize, Deserializer},
     std::{
         borrow::Cow,
-        env, fmt, io, mem,
+        env, fmt, fs, io, mem,
         sync::atomic::{AtomicUsize, Ordering},
     },
     tokio::{
@@ -81,7 +81,7 @@ struct Context {
 }
 
 type Input = (usize, Call<'static>, oneshot::Sender<Output>);
-type Output = (Vec<u8>, Result<String, script::Error>);
+type Output = (Result<String, script::Error>, Vec<u8>);
 
 #[post("/call", data = "<call>")]
 async fn call(
@@ -119,7 +119,7 @@ async fn call(
     let _ = compile.send((file.into_value(), call, tx)).await;
 
     #[allow(unused_variables)]
-    let (bytes, out) = rx.await.unwrap(/* invalid sender usage */);
+    let (out, bytes) = rx.await.unwrap(/* invalid sender usage */);
 
     tracing::debug!(bytes = String::from_utf8_lossy(&bytes).as_ref());
 
@@ -188,13 +188,17 @@ async fn rocket() -> _ {
 
     let (tx, mut rx) = mpsc::channel::<Input>(32);
     tokio::spawn(async move {
-        let _loop = tracing::trace_span!("compiler_loop");
+        let _loop = tracing::debug_span!("compiler_loop");
+
+        let path = env::current_dir()?.join(CRATES);
+        tracing::debug!(?path);
+
+        let _ = fs::create_dir(&path);
+        fs::write(path.join("Cargo.toml"), include_str!("../template/Workspace.toml"))?;
 
         while let Some((id, call, ret)) = rx.recv().await {
             let mut bytes = Vec::with_capacity(128);
-            let result =
-                script::execute_in((&env::current_dir()?.join(CRATES), id), call, &mut bytes).await;
-            let _ = ret.send((bytes, result));
+            let _ = ret.send((script::execute_in((&path, id), call, &mut bytes).await, bytes));
         }
         io::Result::Ok(())
     });

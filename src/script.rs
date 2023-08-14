@@ -64,8 +64,7 @@ pub async fn execute_in(
 ) -> Result<String, Error> {
     let file = format!("_{id}");
     let dir = path.join(&file);
-
-    let _ = fs::create_dir(path);
+    
     let _ = fs::create_dir(&dir);
 
     fs_extra::dir::copy(env::current_dir()?.join("template"), &dir, &options())?;
