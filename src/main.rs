@@ -188,8 +188,6 @@ async fn rocket() -> _ {
 
     let (tx, mut rx) = mpsc::channel::<Input>(32);
     tokio::spawn(async move {
-        let _loop = tracing::debug_span!("compiler_loop");
-
         let path = env::current_dir()?.join(CRATES);
         tracing::debug!(?path);
 
