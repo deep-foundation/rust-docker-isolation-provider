@@ -8,30 +8,35 @@ use {
     json::value::RawValue,
     moka::future::Cache,
     rocket::{
-        figment::providers::Env,
-        response::{content::RawJson, stream::ByteStream},
-        serde::json::Json,
-        Config, Shutdown, State,
+        figment::providers::Env, response::content::RawJson, serde::json::Json, Config, State,
     },
     serde::{de::Error, Deserialize, Deserializer},
     std::{
         borrow::Cow,
-        env, fmt, mem,
+        env, fmt, io, mem,
         sync::atomic::{AtomicUsize, Ordering},
     },
     tokio::{
-        select,
-        sync::broadcast::{channel, error::RecvError, Sender},
+        self,
+        sync::{mpsc, oneshot},
     },
-    tracing::{info, warn},
 };
+
+#[cfg(feature = "bytes-stream")]
+use {
+    rocket::{response::stream::ByteStream, Shutdown},
+    tokio::sync::broadcast::{self, error::RecvError},
+};
+
+#[cfg(feature = "pretty-trace")]
+use tracing::{info, warn};
 
 #[derive(serde::Deserialize)]
 struct Params<T> {
     params: T,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 pub struct Call<'a> {
     jwt: Option<&'a str>,
 
@@ -68,22 +73,32 @@ fn eat_str<T: ToString>(me: T) -> String {
 //  - https://crates.io/keywords/configuration
 const CRATES: &str = "crates";
 
+struct Context {
+    #[cfg(feature = "bytes-stream")]
+    bytes: broadcast::Sender<Vec<u8>>,
+    scripts: Cache<String, usize>,
+    compile: mpsc::Sender<Input>,
+}
+
+type Input = (usize, Call<'static>, oneshot::Sender<Output>);
+type Output = (Vec<u8>, Result<String, script::Error>);
+
 #[post("/call", data = "<call>")]
 async fn call(
     call: Json<Params<Call<'_>>>,
-    scripts: &State<Scripts>,
-    tx: &State<Sender<Vec<u8>>>,
+    ctx: &State<Context>,
 ) -> Result<RawJson<String>, script::Error> {
-    fn unique_rs() -> String {
-        static COUNT: AtomicUsize = AtomicUsize::new(0);
-        format!("_{}", COUNT.fetch_add(1, Ordering::SeqCst))
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+
+    fn unique() -> usize {
+        COUNT.fetch_add(1, Ordering::SeqCst)
     }
 
     let Params { params: call } = call.into_inner();
+    let Context { scripts, compile, .. } = ctx.inner();
 
     let src = call.code.1.as_ref();
-    let mut bytes = Vec::with_capacity(128);
-    let file = scripts.cache.entry_by_ref(src).or_insert_with(async { unique_rs() }).await;
+    let file = scripts.entry_by_ref(src).or_insert_with(async { unique() }).await;
 
     #[cfg(feature = "pretty-trace")]
     match syn::parse_str::<syn::Expr>(src) {
@@ -96,30 +111,36 @@ async fn call(
         Err(err) => warn!("Possible error syntax: {err}"),
     }
 
-    let out = script::execute_in(
-        (&env::current_dir()?.join(CRATES), &file.into_value()),
-        call,
-        &mut bytes,
-    )
-    .await
-    .map_err(eat_str);
+    let (tx, rx) = oneshot::channel();
+    let call: Call<'static> = unsafe {
+        // Safety: We recv result back earlier than ref supposedly dies
+        mem::transmute(call)
+    };
+    let _ = compile.send((file.into_value(), call, tx)).await;
+
+    #[allow(unused_variables)]
+    let (bytes, out) = rx.await.unwrap(/* invalid sender usage */);
+
+    tracing::debug!(bytes = String::from_utf8_lossy(&bytes).as_ref());
 
     // A send 'fails' if there are no active subscribers. That's okay.
-    let _ = tx.send(bytes);
+    #[cfg(feature = "bytes-stream")]
+    let _ = ctx.bytes.send(bytes);
 
-    Ok(RawJson(match out {
+    Ok(RawJson(match out.map_err(eat_str) {
         Ok(res) => res,
         Err(err) => format!("{{\"rejected\": {}}}", json::json!(err)),
     }))
 }
 
+#[cfg(feature = "bytes-stream")]
 #[get("/stream")]
-fn stream(stream: &State<Sender<Vec<u8>>>, mut end: Shutdown) -> ByteStream![Vec<u8>] {
-    let mut rx = stream.subscribe();
+fn stream(ctx: &State<Context>, mut end: Shutdown) -> ByteStream![Vec<u8>] {
+    let mut rx = ctx.bytes.subscribe();
 
     ByteStream! {
         loop {
-            yield select! {
+            yield tokio::select! {
                 msg = rx.recv() => {
                     match msg {
                         Ok(bytes) => bytes,
@@ -133,14 +154,10 @@ fn stream(stream: &State<Sender<Vec<u8>>>, mut end: Shutdown) -> ByteStream![Vec
     }
 }
 
-struct Scripts {
-    pub cache: Cache<String, String>,
-}
-
 use rocket::{get, post, routes};
 
 #[rocket::launch]
-fn rocket() -> _ {
+async fn rocket() -> _ {
     #[post("/init")]
     fn init() {}
 
@@ -149,13 +166,18 @@ fn rocket() -> _ {
         "Service is up and running"
     }
 
-    use tracing_subscriber::fmt::format::Writer;
+    use tracing_subscriber::{fmt::format::Writer, EnvFilter};
 
     let timer: fn(&mut Writer<'_>) -> fmt::Result =
         |w| write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S"));
 
     if cfg!(not(test)) {
-        tracing_subscriber::fmt().pretty().with_timer(timer).with_target(false).init();
+        tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .with_timer(timer)
+            .with_target(false)
+            .pretty()
+            .init();
     }
 
     let figment = if cfg!(docker_image) {
@@ -164,10 +186,36 @@ fn rocket() -> _ {
         Config::figment()
     };
 
+    let (tx, mut rx) = mpsc::channel::<Input>(32);
+    tokio::spawn(async move {
+        let _loop = tracing::trace_span!("compiler_loop");
+
+        while let Some((id, call, ret)) = rx.recv().await {
+            let mut bytes = Vec::with_capacity(128);
+            let result =
+                script::execute_in((&env::current_dir()?.join(CRATES), id), call, &mut bytes).await;
+            let _ = ret.send((bytes, result));
+        }
+        io::Result::Ok(())
+    });
+
+    #[allow(unused_mut)]
+    let mut routes = routes![];
+
+    #[cfg(feature = "bytes-stream")]
+    {
+        routes.extend(routes![stream]);
+    }
+
     rocket::custom(figment)
-        .manage(channel::<Vec<u8>>(1024).0)
-        .manage(Scripts { cache: Cache::new(8096) })
-        .mount("/", routes![init, health, call, stream])
+        .manage(Context {
+            #[cfg(feature = "bytes-stream")]
+            bytes: broadcast::channel::<Vec<u8>>(1024).0,
+            scripts: Cache::new(8096),
+            compile: tx,
+        })
+        .mount("/", routes![init, health, call])
+        .mount("/", routes)
 }
 
 // todo: extract into `tests/` folder
@@ -177,9 +225,7 @@ fn rocket() -> _ {
 mod tests {
     use {
         json::{json, Value},
-        rocket::{form::validate::Contains, http::Status, local::blocking::Client, uri},
-        std::time::Duration,
-        tokio::{join, time},
+        rocket::{form::validate::Contains, http::Status, local::asynchronous::Client, uri},
     };
 
     macro_rules! rusty {
@@ -199,8 +245,8 @@ mod tests {
         }};
     }
 
-    fn rocket() -> Client {
-        Client::tracked(super::rocket()).expect("valid rocket instance")
+    async fn rocket() -> Client {
+        Client::tracked(super::rocket().await).await.expect("valid rocket instance")
     }
 
     #[test]
@@ -228,10 +274,10 @@ mod tests {
         assert_eq!(clean(raw), clean(rusty));
     }
 
-    #[test]
+    #[tokio::test]
     #[cfg_attr(miri, ignore)]
-    fn hello() {
-        let client = rocket();
+    async fn hello() {
+        let client = rocket().await;
 
         let res = client
             .post(uri!(super::call))
@@ -240,16 +286,17 @@ mod tests {
                     format!("{hello} world")
                 } where { "Hi" }
             })
-            .dispatch();
+            .dispatch()
+            .await;
 
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_json::<Value>().unwrap(), json!({ "resolved": "Hi world" }))
+        assert_eq!(res.into_json::<Value>().await.unwrap(), json!({ "resolved": "Hi world" }))
     }
 
-    #[test]
+    #[tokio::test]
     #[cfg_attr(miri, ignore)]
-    fn forbid_stdout() {
-        let client = rocket();
+    async fn forbid_stdout() {
+        let client = rocket().await;
 
         let res = client
             .post(uri!(super::call))
@@ -258,21 +305,26 @@ mod tests {
                     println!("Hello, World!")
                 }
             })
-            .dispatch();
+            .dispatch()
+            .await;
 
         assert_eq!(res.status(), Status::Ok);
 
-        let text = res.into_string().unwrap();
+        let text = res.into_string().await.unwrap();
         assert!(text[1..].starts_with("\"rejected\""));
         assert!(text.contains("print to `std{err, out}` forbidden"));
     }
 
+    #[cfg(feature = "bytes-stream")]
     #[tokio::test]
     #[cfg_attr(miri, ignore)]
     async fn io_stream() {
-        use rocket::local::asynchronous::Client;
+        use {
+            std::time::Duration,
+            tokio::{join, time},
+        };
 
-        let client = Client::tracked(super::rocket()).await.expect("valid rocket instance");
+        let client = Client::tracked(super::rocket().await).await.expect("valid rocket instance");
         let sleep_ms = |ms| time::sleep(Duration::from_millis(ms));
 
         let server = async {

@@ -1,5 +1,5 @@
 [package]
-name = "rs_lib"
+name = #{name}
 version = "0.0.0"
 edition = "2021"
 
@@ -16,8 +16,7 @@ wasm-bindgen = { version = "0.2.87", features = ["serde-serialize"] }
 
 serde = { version = "1.0.157", features = ["derive"] }
 serde_json = "1.0.94"
-__embed_js = { package = "embed", path = "./embed" }
-
+__embed_js = { package = "embed", version = "=0.1.0", git = "https://github.com/uselessgoddess/embed-for-provider" }
 
 [patch.crates-io]
 wasm-bindgen = { git = "https://github.com/uselessgoddess/wasm-bindgen" }
