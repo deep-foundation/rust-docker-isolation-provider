@@ -69,7 +69,7 @@ jobs:
     name: Dockerize
     runs-on: ubuntu-latest
     needs: [build, test, miri]
-    if: ${{ github.ref_name == 'node-rt' && github.event_name == 'push' }}
+    if: ${{ github.ref_name == 'main' && github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v3
       - name: Log in to Docker Hub
