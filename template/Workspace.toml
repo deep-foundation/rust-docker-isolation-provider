@@ -1,0 +1,5 @@
+[workspace]
+members = ['_*/template']
+
+[patch.crates-io]
+wasm-bindgen = { git = 'https://github.com/uselessgoddess/wasm-bindgen' }

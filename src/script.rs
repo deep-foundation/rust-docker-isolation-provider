@@ -45,8 +45,8 @@ impl<E: Into<Box<dyn std::error::Error + Sync + Send + 'static>>> From<E> for Er
     }
 }
 
-// fixme: better clone once static table
-const CARGO: &str = include_str!("../template/Cargo.toml");
+const MOD_JS: &str = include_str!("../template/mod.tmjs");
+const CARGO: &str = include_str!("../template/Cargo.ttoml"); // fixme: better use once static table
 const TEMPLATE: &str = include_str!("../template/src/lib.trs");
 
 // todo: try to replace `(from, to)` into hashmap
@@ -55,25 +55,33 @@ pub fn expand(src: &str, [from, to]: [&str; 2]) -> String {
     src.replace(from, to)
 }
 
+// fixme: use non-blocking `fs` from `tokio`
 #[tracing::instrument(skip(path, stderr, src))]
 pub async fn execute_in(
-    (path, file): (&Path, &str),
+    (path, id): (&Path, usize),
     Call { jwt, code: (manifest, src), data }: Call<'_>,
     stderr: &mut Vec<u8>,
 ) -> Result<String, Error> {
-    let dir = path.join(file);
-
-    let _ = fs::create_dir(path);
+    let file = format!("_{id}");
+    let dir = path.join(&file);
+    
     let _ = fs::create_dir(&dir);
 
     fs_extra::dir::copy(env::current_dir()?.join("template"), &dir, &options())?;
 
     let dir = dir.join("template");
+    fs::write(dir.join("mod.mjs"), expand(MOD_JS, ["#{name}", &file]))?;
     fs::write(dir.join("src/lib.rs"), expand(TEMPLATE, ["#{main}", &src]))?;
 
-    if let Some(manifest) = manifest {
-        fs::write(dir.join("Cargo.toml"), merge_manifest(CARGO.parse()?, manifest)?)?;
-    }
+    let cargo = expand(CARGO, ["#{name}", &format!("\"{file}\"")]);
+    fs::write(
+        dir.join("Cargo.toml"),
+        if let Some(manifest) = manifest {
+            merge_manifest(cargo.parse()?, manifest)?
+        } else {
+            cargo
+        },
+    )?;
 
     macro_rules! troo {
         ($exec:expr => $($args:expr)*) => {{
