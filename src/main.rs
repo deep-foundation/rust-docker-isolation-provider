@@ -303,7 +303,7 @@ mod tests {
         let res = client
             .post(uri!(super::call))
             .json(&json!({
-                "params": { "code": "use serde_json as json; async |_: Ctx| {}" }
+                "params": { "code": "use serde_json as json; async |_: Ctx<json::Value>| {}" }
             }))
             .dispatch()
             .await;
