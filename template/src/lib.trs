@@ -182,10 +182,10 @@ macro_rules! __main_attr {
     (for { $ser:expr }
      where { $($params:expr),* }
 
-    $(use $path:path;)*
+    $(use $path:path $(as $ass:ident)? ;)*
 
     async $($entry:tt)*) => {{
-        $(use $path;)*
+        $(use $path $(as $ass)? ;)*
 
         let ret = __entry!(async $($entry)*)($($params),*).await;
         __respond::Responder::respond_to(ret, $ser)

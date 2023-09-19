@@ -297,6 +297,23 @@ mod tests {
 
     #[tokio::test]
     #[cfg_attr(miri, ignore)]
+    async fn use_as() {
+        let client = rocket().await;
+
+        let res = client
+            .post(uri!(super::call))
+            .json(&json!({
+                "params": { "code": "use serde_json as json; async |_| {}" }
+            }))
+            .dispatch()
+            .await;
+
+        assert_eq!(res.status(), Status::Ok);
+        assert_eq!(res.into_json::<Value>().await.unwrap(), json!({ "resolved": "Hi world" }))
+    }
+
+    #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn forbid_stdout() {
         let client = rocket().await;
 
