@@ -303,13 +303,13 @@ mod tests {
         let res = client
             .post(uri!(super::call))
             .json(&json!({
-                "params": { "code": "use serde_json as json; async |_| {}" }
+                "params": { "code": "use serde_json as json; async |_: Ctx| {}" }
             }))
             .dispatch()
             .await;
 
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_json::<Value>().await.unwrap(), json!({ "resolved": "Hi world" }))
+        assert_eq!(res.into_json::<Value>().await.unwrap(), json!({ "resolved": null }))
     }
 
     #[tokio::test]
