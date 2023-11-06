@@ -1,79 +1,93 @@
-use winnow::{
-    combinator::cut_err,
-    error::{
-        ContextError, ErrMode, StrContext as Ctx,
-        StrContextValue::{Description, StringLiteral},
-    },
-    token::{tag, take_while},
-    PResult, Parser,
+use {
+    ariadne::{Color, Label, Report, ReportKind, Source},
+    std::{cell::Cell, fmt::Formatter},
 };
 
-type Input<'i> = &'i str;
+use chumsky::prelude::*;
 
-fn balance(src: &str) -> Option<&str> {
-    let mut balance = 0usize;
-    for (i, c) in src.bytes().enumerate() {
-        match c {
-            b'{' => balance += 1,
-            b'}' => balance -= 1,
-            _ => {}
+fn parser<'a>() -> impl Parser<'a, &'a str, (Option<&'a str>, &'a str), extra::Err<Rich<'a, char>>>
+{
+    let atom = |kw| text::keyword(kw).padded().labelled(kw).as_context();
+    let op = |c| just(c).padded();
+
+    let balance = Cell::new(0isize);
+    let block = any()
+        .and_is(end().not())
+        .filter(move |c| {
+            match c {
+                '{' => balance.set(balance.get() + 1),
+                '}' => balance.set(balance.get() - 1),
+                _ => {}
+            };
+            balance.get() >= 0
+        })
+        .repeated()
+        .to_slice()
+        .delimited_by(just('{'), just('}'))
+        .labelled("block {..}")
+        .as_context();
+
+    let tail = any().repeated().to_slice();
+    let def = group((atom("where"), atom("cargo"), op(':')));
+
+    let not = atom("where").not();
+    choice((not.map(|_| None).then(tail), def.ignore_then(block).map(Some).then(tail)))
+}
+
+#[derive(Debug)]
+pub struct Error {
+    errors: Vec<Rich<'static, char>>,
+    src: String,
+}
+
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        debug_assert!(!self.errors.is_empty(), "`Error` without `errors` doesn't make sense");
+
+        let mut buf = String::with_capacity(128);
+        for e in &self.errors {
+            Report::build(ReportKind::Error, (), e.span().start)
+                .with_message(e.to_string())
+                .with_label(
+                    Label::new(e.span().into_range())
+                        .with_message(e.reason().to_string())
+                        .with_color(Color::Red),
+                )
+                .with_labels(e.contexts().map(|(label, span)| {
+                    Label::new(span.into_range())
+                        .with_message(format!("while parsing `{}`", label))
+                        .with_color(Color::Yellow)
+                }))
+                .finish()
+                // Safety: report provide valid utf-8`
+                .write(Source::from(&self.src), unsafe { buf.as_mut_vec() })
+                .map_err(|_| fmt::Error)?;
         }
-        if balance == 0 {
-            return Some(&src[1..i]);
-        }
-    }
-    None
-}
 
-fn ws<'i>(input: &mut Input<'i>) -> PResult<&'i str> {
-    take_while(0.., |c: char| c.is_whitespace()).parse_next(input)
-}
-
-fn lit<'i>(lit: &'static str) -> impl FnMut(&mut Input<'i>) -> PResult<&'i str> {
-    move |input| {
-        (ws, tag(lit), ws)
-            .map(|(_, lit, _)| lit)
-            .context(Ctx::Expected(StringLiteral(lit)))
-            .parse_next(input)
+        write!(f, "{buf}")
     }
 }
 
-fn limited<'i>(input: &mut Input<'i>) -> PResult<&'i str> {
-    if let Some(src) = balance(input) {
-        *input = &input[src.len() + 2..]; // 2 is '{' + '}'
-        Ok(src)
-    } else {
-        *input = "";
-        Err(ErrMode::Backtrack(ContextError::new()))
+use {anyhow::Result, std::fmt, toml::Table};
+
+pub fn extract_manifest(src: &str) -> Result<(Option<Table>, &str)> {
+    fn error(errors: Vec<Rich<'_, char>>, src: &str) -> Error {
+        Error { errors: errors.into_iter().map(Rich::into_owned).collect(), src: src.to_owned() }
+    }
+
+    match parser().parse(src).into_result() {
+        Ok((table, src)) => Ok((table.map(str::parse).transpose()?, src)),
+        Err(errors) => Err(error(errors, src).into()),
     }
 }
 
-fn extract_impl<'i>(input: &mut Input<'i>) -> PResult<&'i str> {
-    (
-        lit("where"),
-        cut_err((
-            lit("cargo"),
-            lit(":"),
-            limited.context(Ctx::Expected(Description("`{ .. }` block"))),
-        )),
-    )
-        .map(|(_, (_, _, output))| output)
-        .parse_next(input)
-}
-
-use {anyhow::Result, toml::Table};
-
-pub fn extract_manifest(mut src: &str) -> Result<(Option<Table>, &str)> {
-    match extract_impl(&mut src) {
-        Err(ErrMode::Cut(err)) => anyhow::bail!("{err}"), // error when parsing manifest
-        Err(_) => Ok((None, src)),                        // can't find manifest section
-        Ok(ok) => Ok((Some(ok.parse()?), src)),
-    }
-}
-
-// fixme: add `winnom` inner tests
 #[test]
 fn simple_extract() {
     assert_eq!(extract_manifest("where cargo: {  } TAIL").unwrap(), (Some(Table::new()), " TAIL"));
     assert_eq!(extract_manifest("TAIL").unwrap(), (None, "TAIL"));
+
+    assert!(extract_manifest("where").is_err());
+    assert!(extract_manifest("where cargo: {").is_err());
 }

@@ -1,4 +1,4 @@
-#![allow(clippy::let_unit_value)] // false pos.: https://github.com/SergioBenitez/Rocket/issues/2568
+#![feature(result_option_inspect)]
 
 mod parse;
 mod script;
@@ -56,6 +56,7 @@ fn manifesty<'de, D: Deserializer<'de>>(
         Borrowed(src) => parse::extract_manifest(src).map(|(a, b)| (a, Borrowed(b))),
         Owned(ref str) => parse::extract_manifest(str).map(|(a, b)| (a, Owned(b.to_owned()))),
     }
+    .inspect_err(|err| warn!("{err}"))
     .map_err(Error::custom)
 }
 
