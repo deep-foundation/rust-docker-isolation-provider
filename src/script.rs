@@ -4,7 +4,6 @@ use {
     rocket::{
         http::Status,
         response::{self, Responder},
-        yansi::Paint,
         Request,
     },
     std::{env, fmt, fs, path::Path, time::Instant},
@@ -31,7 +30,7 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
     fn respond_to(self, request: &'r Request<'_>) -> response::Result<'o> {
         match self {
             Self::Internal(err) => {
-                tracing::error!("Bug: {}", Paint::default(err));
+                tracing::error!("Bug: {err}");
                 Err(Status::InternalServerError)
             }
             Self::Compiler(err) => (Status::UnprocessableEntity, err).respond_to(request),
@@ -64,7 +63,7 @@ pub async fn execute_in(
 ) -> Result<String, Error> {
     let file = format!("_{id}");
     let dir = path.join(&file);
-    
+
     let _ = fs::create_dir(&dir);
 
     fs_extra::dir::copy(env::current_dir()?.join("template"), &dir, &options())?;
